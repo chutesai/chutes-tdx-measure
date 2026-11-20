@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "chutes-tdx-measure"
+version = "0.1.0"
+description = "Predict, capture, write, sign and verify TDX measurement documents for Chutes' bring-your-own TDX VM endpoints"
+readme = "README.md"
+# dcap-qvl 0.5.3 (Intel DCAP quote verification, the audited version chutes-attest 0.9.0 pins)
+# ships wheels for these interpreters.
+requires-python = ">=3.10,<3.13"
+license = "MIT"
+license-files = ["LICENSE"]
+dependencies = ["cryptography>=46.0.5", "dcap-qvl==0.5.3", "httpx>=0.28.1,<1"]
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+
+[project.scripts]
+chutes-tdx-measure = "chutes_tdx_measure.cli:main"
+
+[tool.setuptools]
+packages = ["chutes_tdx_measure", "chutes_tdx_measure.vendor", "chutes_tdx_measure.vendor.chutes_attest"]
+
+[tool.setuptools.package-data]
+"chutes_tdx_measure.vendor" = ["PINS.json"]

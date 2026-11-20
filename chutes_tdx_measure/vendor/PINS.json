@@ -1,0 +1,37 @@
+{
+ "schema": "chutes-tdx-measure.vendor-pins.v1",
+ "files": {
+  "chutes_attest/quote.py": {
+   "sha256": "b7cd5d7921edecb00fd11634aef4a03a6beab7f104ac9a016ff29d01c071a407",
+   "source": "chutes-attest 0.9.0 (sek8s 6258257e, src/chutes-attest/chutes_attest/quote.py), comments edited"
+  },
+  "chutes_attest/tdx_verify.py": {
+   "sha256": "e044fec34f994c56a44ffafbdf2fecf291ccc71b202db908a8ebf994c5229152",
+   "source": "chutes-attest 0.9.0 (sek8s 6258257e, src/chutes-attest/chutes_attest/tdx_verify.py), comments edited"
+  },
+  "chutes_attest/tdx_policy.py": {
+   "sha256": "5d1e138fb0f8e4c4f406063079da6701abb440dbd23c638c7de1f055e6b468da",
+   "source": "chutes-attest 0.9.0 (sek8s 6258257e, src/chutes-attest/chutes_attest/tdx_policy.py), comments edited"
+  },
+  "chutes_attest/intel_root.py": {
+   "sha256": "27c09f48634cb26953cc7170618a073ba3683858558d45605164bba3c1164184",
+   "source": "chutes-attest 0.9.0 (sek8s 6258257e, src/chutes-attest/chutes_attest/intel_root.py), comments edited"
+  },
+  "chutes_attest/gcp_tdx_provenance.py": {
+   "sha256": "eddba19e4101e043dc0f27711378d7b5c09e2e4c2737dd01db3781067c176bc3",
+   "source": "chutes-attest 0.9.0 (sek8s 6258257e, src/chutes-attest/chutes_attest/gcp_tdx_provenance.py), comments edited"
+  },
+  "chutes_attest/rtmr_replay.py": {
+   "sha256": "78f364ae171ab1fdd0cca436b7cec9cfd282f2b8ae03d6588073e8301fc747b4",
+   "source": "chutes-attest 0.9.0 (sek8s 6258257e, src/chutes-attest/chutes_attest/rtmr_replay.py), unchanged"
+  },
+  "gcp_prediction.py": {
+   "sha256": "26ad2ee26c8812903f04c0b8924a7c0e5ffb9dd7e393f26dcc247a143fee10a5",
+   "source": "sek8s 6258257e guest-tools/scripts/gcp_prediction.py, comments edited"
+  },
+  "owner_vm_firmware.py": {
+   "sha256": "3deae10ef1f6090a0db0e53ea881e34d9badaed67c9bd3339931d0b59fc436bc",
+   "source": "the Chutes SDK's chutes/entrypoint/owner_vm_firmware.py, comments edited"
+  }
+ }
+}
