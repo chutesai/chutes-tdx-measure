@@ -5,10 +5,13 @@ no shim or GRUB, Secure Boot off), using the GCP TDX model of sek8s (vendored ``
 validated against GCP captures) and systemd-stub's source:
 
 - **RTMR1**: the calling action, a separator, the GPT event (the disk's primary GPT header and its
-  used entries), the UKI's Authenticode digest, the embedded kernel's Authenticode digest
-  (systemd-stub hands the kernel to the firmware's LoadImage, which measures every PE it loads),
-  then the two exit-boot-services actions. An alternative without the kernel event, for a stub
-  that does not hand the kernel to LoadImage, is listed too.
+  used entries), the UKI's Authenticode digest, then the two exit-boot-services actions. Whether the
+  embedded kernel's Authenticode digest sits between them depends on the stub (its ``.sdmagic``):
+  systemd-stub 257 and earlier hand the kernel to the firmware's LoadImage, which measures every PE
+  it loads; 258 and later, with Secure Boot off (the template's setting), map the kernel themselves,
+  so the firmware measures no kernel event (systemd ``src/boot/linux.c``, ``linux_exec``; the kernel
+  is still in the UKI's Authenticode and in the stub's ``.linux`` event in RTMR2). The other form is
+  listed as the alternative.
 - **RTMR2** depends on the UKI's stub (its ``.sdmagic``):
   - systemd-stub 257 or later measures every section it uses (``.linux .osrel .cmdline .initrd
     .ucode .splash .dtb .uname .sbat .pcrpkey .profile .dtbauto .hwids`` in that order, when
@@ -49,6 +52,9 @@ STUB_SECTIONS = (".linux", ".osrel", ".cmdline", ".initrd", ".ucode", ".splash",
 # The first systemd-stub release whose source measures into the CC registers too (measure.c:
 # tpm_log_ipl_event calls cc_log_event first); 255 measures into the TPM only.
 STUB_CC_MEASURED = 257
+# The first systemd-stub release that, with Secure Boot off, maps the UKI's kernel itself instead of
+# handing it to the firmware's LoadImage (src/boot/linux.c, linux_exec): RTMR1 has no kernel event.
+STUB_MAPS_KERNEL = 258
 
 # The label of the all-zero RTMR2 alternative under a 257 stub. A VM that shows it booted where the
 # firmware offered the stub no CC measurement protocol, so nothing the stub adds (a boot entry's or
@@ -63,9 +69,11 @@ MEASURED_INPUTS = [
      "Boot variables, BootOrder and the Boot#### it lists (such an entry with options changes it; an entry "
      "outside BootOrder, selected by BootNext, is not here)"},
     {"register": "RTMR1", "covers": "the GPT header and entries; the UKI's Authenticode (so the stub, the kernel, "
-     "the initrd, the command line, os-release, uname and sbat); the kernel's Authenticode and every other PE "
-     "loaded through the firmware's LoadImage, which measures each one: an ESP addon of any kind, including one "
-     "carrying only an initrd or microcode (whose payloads the stub measures into the vTPM only)"},
+     "the initrd, the command line, os-release, uname and sbat); the kernel's Authenticode when the stub hands the "
+     "kernel to the firmware's LoadImage (systemd-stub 257 and earlier; 258 and later map it themselves with Secure "
+     "Boot off); and every other PE loaded through the firmware's LoadImage, which measures each one: an ESP addon "
+     "of any kind, including one carrying only an initrd or microcode (whose payloads the stub measures into the "
+     "vTPM only)"},
     {"register": "RTMR2", "covers": "each UKI section the stub uses, name and content; any command line the stub "
      "takes from the boot entry (BootNext included: the only TDX evidence of such an entry) or an addon; any "
      "credential, sysext or confext file it packs from the ESP, through the CC measurement protocol of GCE's "
@@ -303,10 +311,19 @@ def predict_uki(disk_path: str, machine_type: str, platform_data: dict = None) -
     kernel_authenticode = gp.authenticode_hash(kernel, "sha384")
     cmdline = section(uki, ".cmdline").rstrip(b"\0").decode("utf-8", "replace")
 
-    primary = rtmr1_events(gpt_event, uki_authenticode, kernel_authenticode)
+    with_kernel = rtmr1_events(gpt_event, uki_authenticode, kernel_authenticode)
     without_kernel = rtmr1_events(gpt_event, uki_authenticode, None)
     version = stub_version(uki)
     major = stub_major(version)
+    if major >= STUB_MAPS_KERNEL:
+        primary, alternative = without_kernel, with_kernel
+        rtmr1_model = (f"the UKI; systemd-stub {version} maps its kernel itself with Secure Boot off (no kernel "
+                       "LoadImage event), GCE TDX")
+        alternative_model = "the UKI and its kernel (LoadImage: the stub with Secure Boot on and shim)"
+    else:
+        primary, alternative = with_kernel, without_kernel
+        rtmr1_model = "UKI and its kernel (LoadImage), GCE TDX"
+        alternative_model = "the UKI only (a stub that does not LoadImage the kernel)"
     sections_value = _replay(stub_events(uki))
     if major >= STUB_CC_MEASURED:
         rtmr2 = sections_value
@@ -329,9 +346,8 @@ def predict_uki(disk_path: str, machine_type: str, platform_data: dict = None) -
         "uki": {"authenticode_sha384": uki_authenticode.hex(), "kernel_authenticode_sha384": kernel_authenticode.hex(),
                 "cmdline": cmdline, "systemd_stub": version},
         "gpt_event_sha384": hashlib.sha384(gpt_event).hexdigest(),
-        "rtmr1": {"value": rtmr1, "model": "UKI and its kernel (LoadImage), GCE TDX", "events": _event_records(primary)},
-        "rtmr1_alternatives": [{"model": "the UKI only (a stub that does not LoadImage the kernel)",
-                                "value": gp.replay_events(without_kernel, "sha384").lower()}],
+        "rtmr1": {"value": rtmr1, "model": rtmr1_model, "events": _event_records(primary)},
+        "rtmr1_alternatives": [{"model": alternative_model, "value": gp.replay_events(alternative, "sha384").lower()}],
         "rtmr2": {"value": rtmr2, "model": rtmr2_model},
         "rtmr2_alternatives": rtmr2_alternatives,
         "rtmr3": None,
