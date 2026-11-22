@@ -120,9 +120,9 @@ UKI = make_pe({".text": b"stub" * 100, ".sdmagic": b"#### LoaderInfo: systemd-st
                ".linux": KERNEL, ".initrd": b"initrd" * 50})
 
 
-def expected_rtmr1(disk: bytes, with_kernel=True) -> str:
+def expected_rtmr1(disk: bytes, with_kernel=True, uki: bytes = UKI) -> str:
     digests = [hashlib.sha384(gp.CALLING_EFI_APPLICATION).digest(), hashlib.sha384(bytes(4)).digest(),
-               hashlib.sha384(gp.gpt_event_data(disk[:34 * 512])).digest(), gp.authenticode_hash(UKI, "sha384")]
+               hashlib.sha384(gp.gpt_event_data(disk[:34 * 512])).digest(), gp.authenticode_hash(uki, "sha384")]
     if with_kernel:
         digests.append(gp.authenticode_hash(KERNEL, "sha384"))
     digests += [hashlib.sha384(gp.EXIT_BOOT_SERVICES_INVOCATION).digest(), hashlib.sha384(gp.EXIT_BOOT_SERVICES_SUCCESS).digest()]
@@ -223,6 +223,29 @@ def test_predict_stub_257(tmp_path):
     unmeasured = " ".join(m["input"] + " " + m["handling"] for m in out["not_measured"])
     for word in ("SMBIOS", "efi=noruntime", "systemd.import_credentials=no", "random.trust_bootloader=off", "sysext"):
         assert word in unmeasured
+
+
+# systemd-stub 258 and later map the kernel themselves with Secure Boot off: RTMR1 has no kernel
+# event (the UKI's own LoadImage event only); the kernel's event is the alternative. RTMR2 is the
+# same section fold as 257's.
+def test_predict_stub_259_no_kernel_event(tmp_path):
+    uki = make_pe({".text": b"stub" * 100, ".sdmagic": b"#### LoaderInfo: systemd-stub 259.9-0ubuntu0.1 ####\0",
+                   ".osrel": b"ID=ubuntu\n", ".cmdline": b"roothash=" + b"ab" * 32 + b" console=ttyS0\0",
+                   ".linux": KERNEL, ".initrd": b"initrd" * 50, ".sbat": b"sbat,1\n"})
+    raw = make_disk(make_fat16({"EFI/BOOT/BOOTX64.EFI": uki}))
+    path = tmp_path / "d.raw"
+    path.write_bytes(raw)
+    out = predict.predict_uki(str(path), "c3-standard-4", PLATFORM)
+    assert out["uki"]["systemd_stub"] == "259.9-0ubuntu0.1"
+    assert out["rtmr1"]["value"] == expected_rtmr1(raw, with_kernel=False, uki=uki)
+    assert len(out["rtmr1"]["events"]) == 6 and not any(".linux" in e["what"] for e in out["rtmr1"]["events"])
+    assert "maps its kernel itself" in out["rtmr1"]["model"]
+    assert out["rtmr1_alternatives"] == [{"model": "the UKI and its kernel (LoadImage: the stub with Secure Boot on and shim)",
+                                          "value": expected_rtmr1(raw, uki=uki)}]
+    assert all(e["rtmr1"] == out["rtmr1"]["value"] for e in out["entries"])
+    want = fold([(b".linux", KERNEL), (b".osrel", b"ID=ubuntu\n"), (b".cmdline", b"roothash=" + b"ab" * 32 + b" console=ttyS0\0"),
+                 (b".initrd", b"initrd" * 50), (b".sbat", b"sbat,1\n")])
+    assert out["rtmr2"]["value"] == want
 
 
 # A stub version with no model (256) is refused rather than guessed.
