@@ -15,7 +15,8 @@ Chutes checks the predictions against quotes and event logs (CCEL) from TDX hard
   `src/acpi.rs`, `src/image.rs`, `src/kernel.rs`, `src/lib.rs`, `src/machine.rs`, `src/tdvf.rs`,
   `src/util.rs`, `tests/fixtures/.gitignore`, `tests/parse.rs`, `tests/regen.rs`.
 - Added: `CHUTES-UPSTREAM.md`, `NOTICE`, `BUILD.md`, `Makefile`, `Dockerfile.qemu-acpi-dump-snp`,
-  `src/smbios.rs`, `tests/chutes.rs`, `tests/fetch_tdvf.sh`.
+  `Dockerfile.qemu-acpi-dump-snp.args`, `build-snp-dump-image.sh`, `src/smbios.rs`,
+  `tests/chutes.rs`, `tests/fetch_tdvf.sh`.
 - Removed: `CODEOWNERS` and `.github/workflows/ci.yml`. This repository's CI builds and tests the
   tool.
 - Unchanged: `LICENSE`, `.gitignore`, `Cargo.lock`, `cli/Cargo.lock`, `cli/Cargo.toml`,
@@ -47,7 +48,7 @@ Chutes checks the predictions against quotes and event logs (CCEL) from TDX hard
   name.
 - **SEV-SNP platform tables.** `--snp-dump DIR --snp-dump-image IMAGE --snp-qemu-version VERSION`
   (`dump_snp_platform_tables`) runs one declared image built from `Dockerfile.qemu-acpi-dump-snp`
-  by digest, with `--pull=never --network=none`, and writes the three fw_cfg blobs QEMU serves for
+  (reproducibly, by `build-snp-dump-image.sh`) by digest, with `--pull=never --network=none`, and writes the three fw_cfg blobs QEMU serves for
   the metadata's measurement shape: `etc/acpi/tables`, `etc/acpi/rsdp` and `etc/table-loader`.
 - **Event logs.** The per-register event logs print at `info` level.
 - **Packaging.** `Cargo.toml` names the licence the source ships, `Apache-2.0`, and the authors

@@ -11,7 +11,7 @@ CARGO_BUILD := cargo build --locked --release --manifest-path cli/Cargo.toml --t
 in_rust = $(DOCKER) run --rm --user "$$(id -u):$$(id -g)" --env CARGO_HOME=/target/cargo-home \
 	--volume "$(CURDIR):/src:ro" --volume "$(1):/target" --workdir /src $(RUST_IMAGE) $(2)
 
-.PHONY: build repro test fixtures
+.PHONY: build repro test fixtures snp-dump-image
 
 # The binary at $(OUT) and its sha256 at $(OUT).sha256.
 build:
@@ -39,3 +39,7 @@ fixtures:
 test: fixtures
 	@mkdir -p target && t=$$(mktemp -d target/.test.XXXXXX) && trap 'rm -rf "$$t"' EXIT && \
 	  $(call in_rust,$(CURDIR)/$$t,cargo test --locked --release --target-dir /target)
+
+# The SEV-SNP dump image, built reproducibly and loaded into Docker (BUILD.md).
+snp-dump-image:
+	./build-snp-dump-image.sh --load target/snp-dump-image

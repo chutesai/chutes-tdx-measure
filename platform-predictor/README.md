@@ -215,8 +215,10 @@ may be `.tar.xz`, `.gz` or `.bz2` and must unpack to a top-level `qemu*/` direct
 table blob (`acpi-tables.bin`), the RSDP (`rsdp.bin`) and the `etc/table-loader` script
 (`table-loader.bin`) that QEMU builds for one SEV-SNP measurement shape: the metadata's
 `boot_config`, with the checking firmware as its `bios`. It computes no measurement. It runs only an
-image named by digest (`<name>@sha256:<64 hex>`), built once from `Dockerfile.qemu-acpi-dump-snp`
-with the three local source package files of the host's QEMU package, each checked by sha256. It
+image named by digest (`<name>@sha256:<64 hex>`), built from `Dockerfile.qemu-acpi-dump-snp`
+with the three source package files of the host's QEMU package, each checked by sha256:
+`./build-snp-dump-image.sh --load OUT_DIR` (or `make snp-dump-image`) builds it reproducibly
+(BUILD.md) and loads it as `chutes-tdx-measure/qemu-acpi-dump-snp`. It
 runs that image under TCG with `docker run --rm --pull=never --network=none`, after checking that
 the image's QEMU version label equals `--snp-qemu-version`. It never builds or pulls an image, and
 it refuses `--create-acpi-tables` and the `--qemu-source-*` flags. Chutes' image build runs it for

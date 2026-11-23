@@ -30,6 +30,10 @@ ARG QEMU_ORIG
 ARG QEMU_ORIG_SHA256
 ARG QEMU_DEBIAN
 ARG QEMU_DEBIAN_SHA256
+# The image is reproducible: SOURCE_DATE_EPOCH (a build argument, the snapshot time) bounds every
+# timestamp BuildKit writes with rewrite-timestamp, and RUN sees it too, so useradd's password date
+# and Python's byte-code files do not depend on the build time.
+ARG SOURCE_DATE_EPOCH
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -68,7 +72,9 @@ RUN set -eu; \
         python3-venv \
         xz-utils; \
     apt-get clean; \
-    rm -rf /var/lib/apt/lists/* /etc/apt/apt.conf.d/99chutes-snapshot-signed-only
+    rm -rf /var/lib/apt/lists/* /etc/apt/apt.conf.d/99chutes-snapshot-signed-only; \
+    rm -f /var/log/dpkg.log /var/log/alternatives.log /var/log/apt/history.log \
+          /var/log/apt/term.log /var/log/apt/eipp.log.xz /var/cache/ldconfig/aux-cache
 
 # The local source: the three files are checked against the build arguments, then unpacked.
 WORKDIR /qemu-src
@@ -87,6 +93,9 @@ RUN set -eu; \
 WORKDIR /qemu-source
 
 USER qemu-user
+
+# meson and QEMU's code generators are Python: a fixed hash seed fixes their set and dict orders.
+ENV PYTHONHASHSEED=0
 
 # Patch QEMU to dump the three fw_cfg ACPI blobs from acpi_build_update and exit before the
 # guest goes further (the anchor must match exactly once), and skip the pc-bios/tests builds.
@@ -119,8 +128,10 @@ RUN perl -i -0pe \
      s/(    DEFINE_PROP_BOOL\("x-rtxpro6000se", PCITestDevState, rtxpro6000se, false\),\n)/$1    DEFINE_PROP_BOOL("x-h200", PCITestDevState, h200, false),\n    DEFINE_PROP_BOOL("x-nvswitch-ls10", PCITestDevState, nvswitch_ls10, false),\n/g == 1 or die "pci-testdev x-h200 property anchor changed\n";' \
     hw/misc/pci-testdev.c
 
-# The TDX dump image's configure, unchanged (TCG stays built in: the SEV-SNP dump runs the
-# measurement shape under TCG).
+# The TDX dump image's configure options, unchanged (TCG stays built in: the SEV-SNP dump runs the
+# measurement shape under TCG), and the build in the same step. The step then removes what records
+# the build itself rather than its result: configure's and meson's logs, meson's pickled state and
+# ninja's logs. Nothing reads them after the build.
 RUN ./configure \
     --disable-bsd-user \
     --disable-guest-agent \
@@ -168,9 +179,9 @@ RUN ./configure \
     --disable-xen \
     --disable-xen-pci-passthrough \
     --disable-tools \
-    --target-list=x86_64-softmmu
-
-RUN make -j$(nproc)
+    --target-list=x86_64-softmmu && \
+    make -j$(nproc) && \
+    rm -rf build/config.log build/meson-logs build/meson-private build/.ninja_log build/.ninja_deps
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD ["build/qemu-system-x86_64", "--version"]
