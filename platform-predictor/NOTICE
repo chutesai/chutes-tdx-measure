@@ -1,0 +1,18 @@
+tdx-measure, the platform predictor of chutes-tdx-measure
+Copyright (c) 2026 Chutes Global Corp
+
+This directory is derived from fortanix/tdx-measure (https://github.com/fortanix/tdx-measure),
+commit b48752b5ae2e2576ea6ac1f60922008a27758ac8, licensed under the Apache License, Version 2.0
+(LICENSE). fortanix/tdx-measure is a fork of virtee/tdx-measure
+(https://github.com/virtee/tdx-measure), which derives from dstack-mr in Dstack-TEE/dstack
+(https://github.com/Dstack-TEE/dstack).
+
+The upstream copyright notices stay in the source files:
+  Copyright (c) 2025 Phala Network
+  Copyright (c) 2025 Tinfoil Inc
+  Copyright (c) 2025-2026 Intel Corporation
+
+The runtime-captured test fixture (tests/fixtures/runtime-capture) comes from upstream and was
+extracted from a Tinfoil TDX guest.
+
+CHUTES-UPSTREAM.md lists the changes Chutes Global Corp made.

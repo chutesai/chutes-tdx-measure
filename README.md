@@ -1,14 +1,23 @@
 # chutes-tdx-measure
 
-Measurement tooling for Chutes' **bring-your-own Intel TDX VM endpoints**: predict an image's TDX
-measurements, capture them from a test boot, write and sign the measurement document Chutes'
-gateway checks, prove you hold the signing key, and verify a quote exactly as the gateway does
-(your key service can use the same check). Source only. The Chutes client ships the same code as
-`chutes tdx …`, with the same version string.
+Chutes' Intel TDX measurement tool. Source only. It has two parts:
+
+- **`chutes-tdx-measure`** (Python, `chutes_tdx_measure/`) for a VM image you build and run on
+  Google Cloud as a **bring-your-own Intel TDX VM endpoint**: predict the image's TDX measurements,
+  capture them from a test boot, write and sign the measurement document Chutes' gateway checks,
+  prove you hold the signing key, and verify a quote exactly as the gateway does (your key service
+  can use the same check). The Chutes client ships the same code as `chutes tdx …`, with the same
+  version string. The rest of this README describes it.
+- **The platform predictor** (Rust, `platform-predictor/`, the `tdx-measure` command) for the guests
+  Chutes' bare-metal TDX hosts launch, by QEMU direct kernel boot with Chutes' TDVF, Chutes' site
+  images among them: MRTD and RTMR0 to RTMR2 from the firmware, the QEMU launch shape, the kernel,
+  initrd and kernel command line, without TDX hardware. `platform-predictor/README.md` describes it
+  and `platform-predictor/BUILD.md` its reproducible build.
 
 ## Licence
 
-MIT (`LICENSE`).
+MIT (`LICENSE`), except `platform-predictor/`: Apache-2.0 (`platform-predictor/LICENSE`), derived
+from fortanix/tdx-measure and dstack-mr (`platform-predictor/NOTICE`).
 
 ## Commands
 

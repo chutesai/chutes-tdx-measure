@@ -28,3 +28,7 @@ is tested against the same cases; `reportdata.json` is the same file as in `chut
 
 `make lock` regenerates `requirements.lock` and `requirements-test.lock` (uv, Python 3.12, no
 annotations).
+
+The platform predictor builds and tests on its own, in a digest-pinned Rust image:
+`make -C platform-predictor test`, `make -C platform-predictor repro` (two builds, the same sha256)
+and `make -C platform-predictor build`; `platform-predictor/BUILD.md` has the details.
