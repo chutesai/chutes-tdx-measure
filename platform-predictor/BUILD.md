@@ -42,7 +42,7 @@ from `Dockerfile.qemu-acpi-dump-snp` reproducibly, so two builders get the same 
   snapshot.ubuntu.com at the snapshot the Dockerfile names, through apt's signed InRelease. The three
   QEMU source package files that `Dockerfile.qemu-acpi-dump-snp.args` names are fetched from
   snapshot.ubuntu.com and checked against their sha256 (the build checks them again), and copied into
-  the build context with mode 0644 and `SOURCE_DATE_EPOCH` as their time.
+  the build context with `pci-bar-stub.c`, with mode 0644 and `SOURCE_DATE_EPOCH` as their time.
 - **Time.** `SOURCE_DATE_EPOCH` in the `.args` file is the snapshot time. BuildKit's
   `rewrite-timestamp` sets every file time later than it to it; `RUN` sees it too, so `useradd` and
   Python's byte-code files do not record the build time.
@@ -72,7 +72,8 @@ fetches the test firmware and runs `cargo test --locked --release` in the same i
 - the library's unit tests;
 - `tests/parse.rs`: MRTD and RTMR0 of every fixture under `tests/fixtures/` equal its
   `expected.json`;
-- `tests/chutes.rs`: the MRTD of Chutes' TDVF equals the value measured on TDX hardware.
+- `tests/chutes.rs`: the MRTD of Chutes' TDVF equals the value measured on TDX hardware;
+- `tests/forms.rs`: the metadata forms (version 1, legacy and chutesai/tdx-measure) and their rules.
 
 `tests/regen.rs` is `#[ignore]`d there. It runs `--create-acpi-tables` for every fixture and requires
 the regenerated `acpi_tables.bin` to equal the committed bytes, which needs Docker on the host, a

@@ -9,9 +9,11 @@ FROM ${DISTRIBUTION}
 #   "ppa"  -> pull-ppa-source from ppa:kobuk-team/tdx-release (Intel TDX QEMU build for 24.04/25.04)
 #   "main" -> pull-lp-source from the distribution's main archive
 #   "url"  -> download a source tarball from QEMU_URL and verify it against QEMU_SHA256
-# "ppa" and "main" build only a QEMU_VERSION whose source package files are pinned below.
+# "ppa" and "main" build a QEMU_VERSION whose source package files are pinned below, or any other
+# QEMU_VERSION given with QEMU_DSC_SHA256, the sha256 of its .dsc file.
 ARG QEMU_SOURCE=ppa
 ARG QEMU_VERSION=
+ARG QEMU_DSC_SHA256=
 # Only used when QEMU_SOURCE=url: source-tarball URL and its expected SHA-256 (hex).
 ARG QEMU_URL=
 ARG QEMU_SHA256=
@@ -38,8 +40,10 @@ WORKDIR /
 # The three Launchpad source package files of every QEMU package version the "ppa" and "main" modes
 # build, one "<mode> <package version> <sha256> <file>" row each. A version string names a Launchpad
 # publication, not its bytes, and these bytes shape the dumped tables (the predicted RTMR0): the
-# selected version's files must equal their rows before anything is unpacked, and a version without
-# rows does not build (add its three rows, or build a tarball with QEMU_SOURCE=url and QEMU_SHA256).
+# selected version's files must equal their rows before anything is unpacked. A version without rows
+# builds only with QEMU_DSC_SHA256: its .dsc must have that sha256, and the files the .dsc lists must
+# have the sha256 its Checksums-Sha256 field gives them (or build a tarball with QEMU_SOURCE=url and
+# QEMU_SHA256).
 RUN printf '%s\n' \
         'ppa 2:8.2.2+ds-0ubuntu1.4+tdx1.1 d8d33ba3eb6dd8caaacde5554459bfe4dcbb230e037d6c06e1ac4a50e74bbbeb qemu_8.2.2+ds-0ubuntu1.4+tdx1.1.dsc' \
         'ppa 2:8.2.2+ds-0ubuntu1.4+tdx1.1 5e692dd20950a819ff6550cd3974e00319a93f47c0a15f808c58df1a9e4d2478 qemu_8.2.2+ds.orig.tar.xz' \
@@ -59,7 +63,10 @@ RUN printf '%s\n' \
         > source-pins
 
 RUN if [ "$QEMU_SOURCE" = "ppa" ] || [ "$QEMU_SOURCE" = "main" ]; then \
-        if ! awk -v mode="$QEMU_SOURCE" -v version="$QEMU_VERSION" \
+        dsc="qemu_${QEMU_VERSION#*:}.dsc" && \
+        if [ -n "$QEMU_DSC_SHA256" ]; then \
+            printf '%s  %s\n' "$QEMU_DSC_SHA256" "$dsc" > DSC.SHA256SUM; \
+        elif ! awk -v mode="$QEMU_SOURCE" -v version="$QEMU_VERSION" \
                 '$1 == mode && $2 == version { print $3 "  " $4; rows++ } END { exit rows != 3 }' \
                 source-pins > SHA256SUMS; then \
             echo "QEMU_SOURCE=$QEMU_SOURCE has no source pins for QEMU_VERSION=$QEMU_VERSION"; exit 1; \
@@ -69,8 +76,16 @@ RUN if [ "$QEMU_SOURCE" = "ppa" ] || [ "$QEMU_SOURCE" = "main" ]; then \
         else \
             pull-lp-source --download-only qemu "$QEMU_VERSION"; \
         fi && \
+        if [ -n "$QEMU_DSC_SHA256" ]; then \
+            sha256sum --check --strict DSC.SHA256SUM && \
+            awk '/^Checksums-Sha256:/ { listed = 1; next } listed && /^ / { print $1 "  " $3; next } { listed = 0 }' \
+                "$dsc" > SHA256SUMS && \
+            [ -s SHA256SUMS ]; \
+        else \
+            [ "$(awk '$2 ~ /\.dsc$/ { print $2 }' SHA256SUMS)" = "$dsc" ]; \
+        fi && \
         sha256sum --check --strict SHA256SUMS && \
-        dpkg-source -x "$(awk '$2 ~ /\.dsc$/ { print $2 }' SHA256SUMS)"; \
+        dpkg-source -x "$dsc"; \
     elif [ "$QEMU_SOURCE" = "url" ]; then \
         if [ -z "$QEMU_URL" ] || [ -z "$QEMU_SHA256" ]; then \
             echo "QEMU_SOURCE=url requires QEMU_URL and QEMU_SHA256"; exit 1; \
@@ -88,6 +103,15 @@ RUN QEMU_WRK_DIR=$(find / -maxdepth 1 -type d -name "qemu*" | head -n 1) && \
     ln -s "$QEMU_WRK_DIR" /qemu-source && \
     useradd -m -s /sbin/nologin qemu-user && \
     chown -R qemu-user:qemu-user "$QEMU_WRK_DIR"
+
+# pci-bar-stub (pci-bar-stub.c): a PCI device with a declared BAR layout, vendor, device and class and
+# no backing memory, which stands in for a passed-through device so the dump runs without it. It is
+# built into QEMU 10.1 and later (the QOM interfaces it is written against).
+COPY pci-bar-stub.c /pci-bar-stub.c
+RUN if [ "$(awk -F. '{ print $1 * 1000 + $2 }' /qemu-source/VERSION)" -ge 10001 ]; then \
+        install -m 0644 -o qemu-user -g qemu-user /pci-bar-stub.c /qemu-source/hw/misc/pci-bar-stub.c && \
+        printf "\nsystem_ss.add(files('pci-bar-stub.c'))\n" >> /qemu-source/hw/misc/meson.build; \
+    fi
 
 WORKDIR /qemu-source
 
@@ -107,28 +131,6 @@ RUN perl -i -0pe 's/(acpi_build_update\(void \*build_opaque\)[\s\S]*?acpi_build\
     perl -i -0pe 's/(smbios_get_tables\([\s\S]*?\&error_fatal\);)/\1'"$smbios_tables_dump_loc"'/s' "$fw_cfg_c" && \
     perl -i -pe 's/x86ms->eoi_intercept_unsupported;/1;/g' "$acpi_build_c" "$acpi_common_c" && \
     perl -i -pe "s/^(\s*)(subdir\('pc-bios'\)|subdir\('tests'\))/\$1# \$2/g" "$meson_build"
-
-# Model the RTX PRO 6000 SE BAR layout only when the predictor explicitly selects it.
-# Preserve ordinary pci-testdev defaults and all test-state/reset/cleanup initialization.
-# These additional apertures are unbacked: the dumper exits before guest execution.
-RUN perl -i -0pe \
-    's/(    MemoryRegion membar;\n)/$1    bool rtxpro6000se;\n    MemoryRegion rtx_bar0;\n    MemoryRegion rtx_bar4;\n/g == 1 or die "pci-testdev state anchor changed\n"; \
-     s/    pci_register_bar\(pci_dev, 0, PCI_BASE_ADDRESS_SPACE_MEMORY, &d->mmio\);\n    pci_register_bar\(pci_dev, 1, PCI_BASE_ADDRESS_SPACE_IO, &d->portio\);/    if (d->rtxpro6000se) {\n        memory_region_init(\&d->rtx_bar0, OBJECT(d),\n                           "pci-testdev-rtx-bar0", 64ULL * 1024 * 1024);\n        pci_register_bar(pci_dev, 0,\n                         PCI_BASE_ADDRESS_SPACE_MEMORY |\n                         PCI_BASE_ADDRESS_MEM_PREFETCH |\n                         PCI_BASE_ADDRESS_MEM_TYPE_64,\n                         \&d->rtx_bar0);\n        memory_region_init(\&d->rtx_bar4, OBJECT(d),\n                           "pci-testdev-rtx-bar4", 32ULL * 1024 * 1024);\n        pci_register_bar(pci_dev, 4,\n                         PCI_BASE_ADDRESS_SPACE_MEMORY |\n                         PCI_BASE_ADDRESS_MEM_PREFETCH |\n                         PCI_BASE_ADDRESS_MEM_TYPE_64,\n                         \&d->rtx_bar4);\n    } else {\n        pci_register_bar(pci_dev, 0, PCI_BASE_ADDRESS_SPACE_MEMORY, \&d->mmio);\n        pci_register_bar(pci_dev, 1, PCI_BASE_ADDRESS_SPACE_IO, \&d->portio);\n    }/g == 1 or die "pci-testdev BAR anchors changed\n"; \
-     s/(    DEFINE_PROP_BOOL\("membar-backed", PCITestDevState, membar_backed, false\),\n)/$1    DEFINE_PROP_BOOL("x-rtxpro6000se", PCITestDevState, rtxpro6000se, false),\n/g == 1 or die "pci-testdev property anchor changed\n";' \
-    hw/misc/pci-testdev.c
-
-# Two more explicitly selected surrogate modes, applied on top of the RTX patch above, with the
-# BAR layouts of the devices they stand in for:
-#   x-h200           H200 GPU: BAR0 16 MiB and BAR4 32 MiB, 64-bit prefetchable, no I/O BAR
-#                    (BAR2 stays the membar aperture of the measurement shape);
-#   x-nvswitch-ls10  LS10 NVSwitch: one BAR0 of 32 MiB, 64-bit non-prefetchable, nothing else.
-# Realize fails when more than one mode is set or when x-nvswitch-ls10 meets a membar.
-# Every anchor must match exactly once.
-RUN perl -i -0pe \
-    's/(    MemoryRegion rtx_bar4;\n)/$1    bool h200;\n    bool nvswitch_ls10;\n    MemoryRegion h200_bar0;\n    MemoryRegion h200_bar4;\n    MemoryRegion ls10_bar0;\n/g == 1 or die "pci-testdev x-h200 state anchor changed\n"; \
-     s/    if \(d->rtxpro6000se\) \{\n/    if ((d->rtxpro6000se ? 1 : 0) + (d->h200 ? 1 : 0) + (d->nvswitch_ls10 ? 1 : 0) > 1 ||\n        (d->nvswitch_ls10 \&\& d->membar_size)) {\n        fprintf(stderr, "pci-testdev: at most one surrogate mode, and no membar with x-nvswitch-ls10\\n");\n        exit(1);\n    }\n    if (d->h200) {\n        memory_region_init(\&d->h200_bar0, OBJECT(d),\n                           "pci-testdev-h200-bar0", 16ULL * 1024 * 1024);\n        pci_register_bar(pci_dev, 0,\n                         PCI_BASE_ADDRESS_SPACE_MEMORY |\n                         PCI_BASE_ADDRESS_MEM_PREFETCH |\n                         PCI_BASE_ADDRESS_MEM_TYPE_64,\n                         \&d->h200_bar0);\n        memory_region_init(\&d->h200_bar4, OBJECT(d),\n                           "pci-testdev-h200-bar4", 32ULL * 1024 * 1024);\n        pci_register_bar(pci_dev, 4,\n                         PCI_BASE_ADDRESS_SPACE_MEMORY |\n                         PCI_BASE_ADDRESS_MEM_PREFETCH |\n                         PCI_BASE_ADDRESS_MEM_TYPE_64,\n                         \&d->h200_bar4);\n    } else if (d->nvswitch_ls10) {\n        memory_region_init(\&d->ls10_bar0, OBJECT(d),\n                           "pci-testdev-ls10-bar0", 32ULL * 1024 * 1024);\n        pci_register_bar(pci_dev, 0,\n                         PCI_BASE_ADDRESS_SPACE_MEMORY |\n                         PCI_BASE_ADDRESS_MEM_TYPE_64,\n                         \&d->ls10_bar0);\n    } else if (d->rtxpro6000se) {\n/g == 1 or die "pci-testdev x-h200 BAR anchor changed\n"; \
-     s/(    DEFINE_PROP_BOOL\("x-rtxpro6000se", PCITestDevState, rtxpro6000se, false\),\n)/$1    DEFINE_PROP_BOOL("x-h200", PCITestDevState, h200, false),\n    DEFINE_PROP_BOOL("x-nvswitch-ls10", PCITestDevState, nvswitch_ls10, false),\n/g == 1 or die "pci-testdev x-h200 property anchor changed\n";' \
-    hw/misc/pci-testdev.c
 
 # Configure QEMU with minimal features to reduce build time and image size - only KVM acceleration is needed for ACPI table generation
 RUN ./configure \

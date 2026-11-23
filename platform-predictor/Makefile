@@ -35,7 +35,7 @@ fixtures:
 	tests/fetch_ovmf.sh
 	tests/fetch_tdvf.sh
 
-# The library's unit tests and tests/{parse,chutes}.rs. tests/regen.rs is ignored here (BUILD.md).
+# The library's unit tests and tests/{parse,chutes,forms}.rs. tests/regen.rs is ignored here (BUILD.md).
 test: fixtures
 	@mkdir -p target && t=$$(mktemp -d target/.test.XXXXXX) && trap 'rm -rf "$$t"' EXIT && \
 	  $(call in_rust,$(CURDIR)/$$t,cargo test --locked --release --target-dir /target)

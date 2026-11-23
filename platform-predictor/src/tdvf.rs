@@ -9,9 +9,9 @@ use anyhow::{anyhow, bail, Context, Result};
 use sha2::{Digest, Sha384};
 
 use crate::num::read_le;
-use crate::smbios::ovmf_filter_for_measurement;
+use crate::smbios::{check_fork_form_measurable, ovmf_filter_for_measurement};
 use crate::util::{debug_print_log, measure_log, measure_sha384, read_file_data, utf16_encode};
-use crate::{ImageConfig, Machine};
+use crate::{ImageConfig, Machine, MetadataForm, FIRMWARE_EDK2_STABLE202605};
 
 const PAGE_SIZE: u64 = 0x1000;
 const MR_EXTEND_GRANULARITY: usize = 0x100;
@@ -271,8 +271,17 @@ impl<'a> Tdvf<'a> {
             .image_config
             .as_ref()
             .and_then(|config| config.boot_config.as_ref());
-        let chutes_202605 = boot_config.and_then(|config| config.firmware_profile.as_deref())
-            == Some("edk2-stable202605");
+        let fork_form = machine
+            .image_config
+            .as_ref()
+            .is_some_and(|config| config.form == MetadataForm::LegacyFork);
+        // The chutesai/tdx-measure form measured every direct boot with this sequence.
+        let chutes_202605 = if fork_form {
+            machine.direct_boot
+        } else {
+            boot_config.and_then(|config| config.firmware_profile.as_deref())
+                == Some(FIRMWARE_EDK2_STABLE202605)
+        };
         // Calculate measurement of the TD Hand-Off Block (TD-HOB)
         let td_hob_hash = self.measure_td_hob(machine.memory_size)?;
 
@@ -287,8 +296,7 @@ impl<'a> Tdvf<'a> {
         if !machine.exclude_acpi_tables_rtmr0 {
             let tables = if let Some(ImageConfig {
                 boot_config: Some(boot_config),
-                direct: _,
-                indirect: _,
+                ..
             }) = &machine.image_config
             {
                 machine.build_tables_with_boot_config(boot_config)?
@@ -309,16 +317,22 @@ impl<'a> Tdvf<'a> {
             // QEMU 10.2.1 hw/pci/pci.c publishes etc/extra-pci-roots only
             // when expander root buses exist, as their little-endian u64 count.
             // edk2-stable202605 QemuFwCfgCacheInit.c measures it before BootMenu.
+            // The chutesai/tdx-measure form keeps that fork's count: the devices whose text
+            // contains `pxb-pcie`.
             let extra_pci_roots = boot_config
                 .and_then(|config| config.qemu.as_ref())
                 .map(|qemu| {
                     qemu.devices
                         .iter()
                         .filter(|device| {
-                            matches!(
-                                device.split(',').next(),
-                                Some("pxb" | "pxb-pcie" | "pxb-cxl")
-                            )
+                            if fork_form {
+                                device.contains("pxb-pcie")
+                            } else {
+                                matches!(
+                                    device.split(',').next(),
+                                    Some("pxb" | "pxb-pcie" | "pxb-cxl")
+                                )
+                            }
                         })
                         .count() as u64
                 })
@@ -373,6 +387,9 @@ impl<'a> Tdvf<'a> {
                 .filter(|path| !path.is_empty())
                 .context("edk2-stable202605 requires generated SMBIOS tables")?;
             let smbios = read_file_data(smbios_path)?;
+            if fork_form {
+                check_fork_form_measurable(&smbios)?;
+            }
             rtmr0_log.push(measure_sha384(&ovmf_filter_for_measurement(&smbios)?));
         } else {
             rtmr0_log.push(measure_sha384(&boot_order_data));

@@ -48,10 +48,17 @@ struct Cli {
     /// Generate ACPI tables for direct boot. First value is the distribution
     /// (e.g. ubuntu:25.04, ubuntu:26.04); the optional second value pins a
     /// specific QEMU source-package version and otherwise defaults to the
-    /// distribution's pinned version. A version builds only when
-    /// `Dockerfile.qemu-acpi-dump` pins its source package files by sha256.
+    /// distribution's pinned version. A version builds when
+    /// `Dockerfile.qemu-acpi-dump` pins its source package files by sha256,
+    /// or when --qemu-dsc-sha256 gives the sha256 of its .dsc file.
     #[arg(long, num_args = 1..=2, value_names = ["DISTRIBUTION", "QEMU_VERSION"])]
     create_acpi_tables: Option<Vec<String>>,
+
+    /// The sha256 of the .dsc file of the QEMU_VERSION that --create-acpi-tables
+    /// names, for a version `Dockerfile.qemu-acpi-dump` does not pin. The files
+    /// the .dsc lists must have the sha256 its Checksums-Sha256 field gives.
+    #[arg(long, value_name = "HEX")]
+    qemu_dsc_sha256: Option<String>,
 
     /// Apply QEMU-style kernel boot-params patching before measuring RTMR1.
     /// Pass `--patch-kernel` for kernels before Ubuntu:26.04,
@@ -99,12 +106,13 @@ fn snp_dump(config: &Cli, image_config: &ImageConfig, dir: &Path) -> Result<()> 
         anyhow!("--snp-dump requires --snp-qemu-version (the launch contract's QEMU)")
     })?;
     if config.create_acpi_tables.is_some()
+        || config.qemu_dsc_sha256.is_some()
         || config.qemu_source_url.is_some()
         || config.qemu_source_sha256.is_some()
     {
         return Err(anyhow!(
-            "--snp-dump never builds a dump image: it refuses --create-acpi-tables and \
-             --qemu-source-*"
+            "--snp-dump never builds a dump image: it refuses --create-acpi-tables, \
+             --qemu-dsc-sha256 and --qemu-source-*"
         ));
     }
     let mut boot_config = image_config
@@ -131,7 +139,7 @@ struct PathResolver {
 }
 
 struct PathStorage {
-    cpu_count: u8,
+    cpu_count: u32,
     memory_size: u64,
     firmware: String,
     cmdline: String,
@@ -211,6 +219,7 @@ impl PathResolver {
         create_acpi_table: bool,
         distribution: &'a str,
         qemu_version: Option<&'a str>,
+        qemu_dsc_sha256: Option<&'a str>,
         patch_kernel: bool,
         qemu_source_url: Option<&'a str>,
         qemu_source_sha256: Option<&'a str>,
@@ -239,6 +248,7 @@ impl PathResolver {
             .create_acpi_table(create_acpi_table)
             .distribution(distribution)
             .maybe_qemu_version(qemu_version)
+            .maybe_qemu_dsc_sha256(qemu_dsc_sha256)
             .patch_kernel(patch_kernel)
             .maybe_qemu_source_url(qemu_source_url)
             .maybe_qemu_source_sha256(qemu_source_sha256)
@@ -278,6 +288,10 @@ fn process_measurements(config: &Cli, image_config: &ImageConfig) -> Result<()> 
     };
     let mut error_msgs = String::new();
 
+    if config.qemu_dsc_sha256.is_some() && qemu_version.is_none() {
+        error_msgs.push_str("--qemu-dsc-sha256 needs --create-acpi-tables DISTRIBUTION QEMU_VERSION\n");
+    }
+
     // Check usage of --create-acpi-tables flag
     if create_acpi_table {
         if !direct_boot {
@@ -312,6 +326,7 @@ fn process_measurements(config: &Cli, image_config: &ImageConfig) -> Result<()> 
         create_acpi_table,
         distribution,
         qemu_version,
+        config.qemu_dsc_sha256.as_deref(),
         config.patch_kernel,
         config.qemu_source_url.as_deref(),
         config.qemu_source_sha256.as_deref(),
@@ -366,10 +381,7 @@ fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
 
     let cli = Cli::parse();
-    let metadata = fs::read_to_string(&cli.metadata)
-        .context("Failed to read image metadata")?;
-    let image_config: ImageConfig = serde_json::from_str(&metadata)
-        .context("Failed to parse image metadata")?;
+    let image_config = ImageConfig::load(&cli.metadata)?;
 
     if let Some(dir) = cli.snp_dump.as_deref() {
         return snp_dump(&cli, &image_config, dir);

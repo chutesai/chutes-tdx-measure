@@ -14,7 +14,7 @@ use std::path::Path;
 
 #[derive(Debug, bon::Builder)]
 pub struct Machine<'a> {
-    pub cpu_count: u8,
+    pub cpu_count: u32,
     pub memory_size: u64,
     pub qcow2: Option<&'a str>,
     pub firmware: &'a str,
@@ -36,6 +36,8 @@ pub struct Machine<'a> {
     pub create_acpi_table: bool,
     pub distribution: &'a str,
     pub qemu_version: Option<&'a str>,
+    /// The sha256 of the `.dsc` file of `qemu_version`, a version the dump Dockerfile does not pin.
+    pub qemu_dsc_sha256: Option<&'a str>,
     /// When set (together with `qemu_source_sha256`), build QEMU from this
     /// source tarball URL (hash-verified) instead of the distribution package.
     pub qemu_source_url: Option<&'a str>,

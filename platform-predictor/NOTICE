@@ -15,4 +15,7 @@ The upstream copyright notices stay in the source files:
 The runtime-captured test fixture (tests/fixtures/runtime-capture) comes from upstream and was
 extracted from a Tinfoil TDX guest.
 
+pci-bar-stub.c comes unchanged from chutesai/tdx-measure (https://github.com/chutesai/tdx-measure),
+commit 494f18deba4c8c85b626b3fb11b612c7721b156b, licensed under the Apache License, Version 2.0.
+
 CHUTES-UPSTREAM.md lists the changes Chutes Global Corp made.

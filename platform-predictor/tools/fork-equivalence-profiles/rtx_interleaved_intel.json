@@ -1,0 +1,205 @@
+{
+  "cpu": {
+    "count": 128,
+    "processor_id": "f3060a00fffba91f",
+    "sockets": 2,
+    "vendor": "GenuineIntel"
+  },
+  "gpus": [
+    {
+      "bars": [
+        {
+          "index": 0,
+          "kind": "p64",
+          "size_mb": 64
+        },
+        {
+          "index": 2,
+          "kind": "p64",
+          "size_mb": 131072
+        },
+        {
+          "index": 4,
+          "kind": "p64",
+          "size_mb": 32
+        }
+      ],
+      "device_id": "2bb5",
+      "numa_node": 0,
+      "pci_class": "0302",
+      "vendor": "10de"
+    },
+    {
+      "bars": [
+        {
+          "index": 0,
+          "kind": "p64",
+          "size_mb": 64
+        },
+        {
+          "index": 2,
+          "kind": "p64",
+          "size_mb": 131072
+        },
+        {
+          "index": 4,
+          "kind": "p64",
+          "size_mb": 32
+        }
+      ],
+      "device_id": "2bb5",
+      "numa_node": 1,
+      "pci_class": "0302",
+      "vendor": "10de"
+    },
+    {
+      "bars": [
+        {
+          "index": 0,
+          "kind": "p64",
+          "size_mb": 64
+        },
+        {
+          "index": 2,
+          "kind": "p64",
+          "size_mb": 131072
+        },
+        {
+          "index": 4,
+          "kind": "p64",
+          "size_mb": 32
+        }
+      ],
+      "device_id": "2bb5",
+      "numa_node": 0,
+      "pci_class": "0302",
+      "vendor": "10de"
+    },
+    {
+      "bars": [
+        {
+          "index": 0,
+          "kind": "p64",
+          "size_mb": 64
+        },
+        {
+          "index": 2,
+          "kind": "p64",
+          "size_mb": 131072
+        },
+        {
+          "index": 4,
+          "kind": "p64",
+          "size_mb": 32
+        }
+      ],
+      "device_id": "2bb5",
+      "numa_node": 1,
+      "pci_class": "0302",
+      "vendor": "10de"
+    },
+    {
+      "bars": [
+        {
+          "index": 0,
+          "kind": "p64",
+          "size_mb": 64
+        },
+        {
+          "index": 2,
+          "kind": "p64",
+          "size_mb": 131072
+        },
+        {
+          "index": 4,
+          "kind": "p64",
+          "size_mb": 32
+        }
+      ],
+      "device_id": "2bb5",
+      "numa_node": 0,
+      "pci_class": "0302",
+      "vendor": "10de"
+    },
+    {
+      "bars": [
+        {
+          "index": 0,
+          "kind": "p64",
+          "size_mb": 64
+        },
+        {
+          "index": 2,
+          "kind": "p64",
+          "size_mb": 131072
+        },
+        {
+          "index": 4,
+          "kind": "p64",
+          "size_mb": 32
+        }
+      ],
+      "device_id": "2bb5",
+      "numa_node": 1,
+      "pci_class": "0302",
+      "vendor": "10de"
+    },
+    {
+      "bars": [
+        {
+          "index": 0,
+          "kind": "p64",
+          "size_mb": 64
+        },
+        {
+          "index": 2,
+          "kind": "p64",
+          "size_mb": 131072
+        },
+        {
+          "index": 4,
+          "kind": "p64",
+          "size_mb": 32
+        }
+      ],
+      "device_id": "2bb5",
+      "numa_node": 0,
+      "pci_class": "0302",
+      "vendor": "10de"
+    },
+    {
+      "bars": [
+        {
+          "index": 0,
+          "kind": "p64",
+          "size_mb": 64
+        },
+        {
+          "index": 2,
+          "kind": "p64",
+          "size_mb": 131072
+        },
+        {
+          "index": 4,
+          "kind": "p64",
+          "size_mb": 32
+        }
+      ],
+      "device_id": "2bb5",
+      "numa_node": 1,
+      "pci_class": "0302",
+      "vendor": "10de"
+    }
+  ],
+  "ib_devices": [],
+  "memory": {
+    "guest_gb": 768
+  },
+  "numa": {
+    "node_count": 2
+  },
+  "nvswitches": [],
+  "qemu": {
+    "qemu_version": "10.2.1"
+  }
+}
