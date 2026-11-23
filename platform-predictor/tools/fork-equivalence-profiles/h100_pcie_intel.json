@@ -1,0 +1,44 @@
+{
+  "cpu": {
+    "count": 32,
+    "processor_id": "f8060800fffbebbf",
+    "sockets": 1,
+    "vendor": "GenuineIntel"
+  },
+  "gpus": [
+    {
+      "bars": [
+        {
+          "index": 0,
+          "kind": "p64",
+          "size_mb": 16
+        },
+        {
+          "index": 2,
+          "kind": "p64",
+          "size_mb": 131072
+        },
+        {
+          "index": 4,
+          "kind": "p64",
+          "size_mb": 32
+        }
+      ],
+      "device_id": "2331",
+      "numa_node": 0,
+      "pci_class": "0302",
+      "vendor": "10de"
+    }
+  ],
+  "ib_devices": [],
+  "memory": {
+    "guest_gb": 80
+  },
+  "numa": {
+    "node_count": 1
+  },
+  "nvswitches": [],
+  "qemu": {
+    "qemu_version": "10.2.1"
+  }
+}

@@ -4,13 +4,13 @@
 #   ./build-snp-dump-image.sh [--load] OUT_DIR
 #
 # Fetches the three QEMU source package files that Dockerfile.qemu-acpi-dump-snp.args names from
-# snapshot.ubuntu.com (each checked against its sha256 there), copies them into the build context
-# with fixed modes and SOURCE_DATE_EPOCH as their time, and builds with BuildKit pinned by digest,
-# daemonless in a privileged container, no cache, into an OCI archive with rewrite-timestamp. Two
-# builders get the same manifest digest. Writes OUT_DIR/image.tar and OUT_DIR/digest and prints
-# the digest. With --load, the archive is loaded into Docker as chutes-tdx-measure/qemu-acpi-dump-snp,
-# the name tdx-measure --snp-dump-image takes with the digest (Docker's containerd image store keeps
-# the manifest digest of a loaded image).
+# snapshot.ubuntu.com (each checked against its sha256 there), copies them and pci-bar-stub.c into
+# the build context with fixed modes and SOURCE_DATE_EPOCH as their time, and builds with BuildKit
+# pinned by digest, daemonless in a privileged container, no cache, into an OCI archive with
+# rewrite-timestamp. Two builders get the same manifest digest. Writes OUT_DIR/image.tar and
+# OUT_DIR/digest and prints the digest. With --load, the archive is loaded into Docker as
+# chutes-tdx-measure/qemu-acpi-dump-snp, the name tdx-measure --snp-dump-image takes with the digest
+# (Docker's containerd image store keeps the manifest digest of a loaded image).
 set -euo pipefail
 
 BUILDKIT_IMAGE=moby/buildkit@sha256:de10faf919fc71ba4eb1dd7bd6449566d012b0c9436b1c61bfee21d621b009aa
@@ -37,6 +37,7 @@ for kind in DSC ORIG DEBIAN; do
   curl -fsSL --retry 5 -o "$work/context/$file" "$SOURCE_URL/$file"
   [ "$(sha256sum < "$work/context/$file" | cut -c1-64)" = "$sha" ] || { echo "sha256 mismatch: $file" >&2; exit 1; }
 done
+cp "$here/pci-bar-stub.c" "$work/context/pci-bar-stub.c"
 chmod 0644 "$work/context"/*
 touch -d "@$(arg SOURCE_DATE_EPOCH)" "$work/context" "$work/context"/*
 

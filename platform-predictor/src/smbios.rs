@@ -271,6 +271,61 @@ pub(crate) fn ovmf_filter_for_measurement(data: &[u8]) -> Result<Vec<u8>> {
     filter_for_measurement(&tables)
 }
 
+/// Writes `processor_id` into the 8-byte Processor ID field (offset 8) of every Type-4 structure of
+/// a QEMU SMBIOS table, as QEMU's `-smbios type=4,processor-id=` sets it; a structure too short to
+/// hold the field is left as it is.
+pub(crate) fn patch_type4_processor_id(data: &mut [u8], processor_id: &[u8; 8]) -> Result<()> {
+    let mut start = 0usize;
+    while start < data.len() {
+        if start + 4 > data.len() {
+            bail!("truncated SMBIOS structure header");
+        }
+        let table_type = data[start];
+        let formatted_len = data[start + 1] as usize;
+        if formatted_len < 4 {
+            bail!("invalid SMBIOS formatted structure length");
+        }
+        let end = entry_end(data, start, formatted_len)?;
+        if table_type == 4 && formatted_len >= 16 {
+            data[start + 8..start + 16].copy_from_slice(processor_id);
+        }
+        if table_type == 127 {
+            break;
+        }
+        start = end;
+    }
+    Ok(())
+}
+
+/// Refuses QEMU SMBIOS tables that the chutesai/tdx-measure fork measured differently from
+/// edk2-stable202605: a Type 0 structure (that fork appended OVMF's Type 0 regardless) or one of
+/// the types the edk2 filter clears whole, 11, 15, 18, 31, 33 and 128 and above (that fork cleared
+/// only their formatted area). For every other table the two measurements are the same bytes.
+pub(crate) fn check_fork_form_measurable(data: &[u8]) -> Result<()> {
+    let mut start = 0usize;
+    while start < data.len() {
+        if start + 4 > data.len() {
+            bail!("truncated SMBIOS structure header");
+        }
+        let table_type = data[start];
+        let formatted_len = data[start + 1] as usize;
+        if formatted_len < 4 {
+            bail!("invalid SMBIOS formatted structure length");
+        }
+        if table_type == 0 || table_type >= 128 || matches!(filters_for(table_type), Some(&[])) {
+            bail!(
+                "SMBIOS Type {table_type}: the chutesai/tdx-measure form cannot measure it as \
+                 that fork did; use metadata_version 1"
+            );
+        }
+        if table_type == 127 {
+            break;
+        }
+        start = entry_end(data, start, formatted_len)?;
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -291,6 +346,44 @@ mod tests {
         assert_eq!(filtered[24], 0);
         assert_eq!(filtered[7], 0);
         assert!(filtered.windows(6).any(|window| window == b"      "));
+    }
+
+    /// The Type-4 structure of a QEMU table whose Processor ID came from the host's CPUID, patched
+    /// to `0100000000000000`, is the structure `-smbios type=4,processor-id=1` makes.
+    #[test]
+    fn processor_id_patch_equals_qemu_processor_id_option() {
+        let from_cpuid = hex!(
+            "042a00040103fe02f2060c00fffba91f03000000d007d0074101ffffffffffff"
+            "0000003e3e3e0200010043505520300051454d550070632d7133352d31302e3200"
+            "007f04007f0000"
+        );
+        let from_option = hex!(
+            "042a00040103fe020100000000000000" "03000000d007d0074101ffffffffffff"
+            "0000003e3e3e0200010043505520300051454d550070632d7133352d31302e3200"
+            "007f04007f0000"
+        );
+        let mut patched = from_cpuid.to_vec();
+        patch_type4_processor_id(&mut patched, &hex!("0100000000000000")).unwrap();
+        assert_eq!(patched, from_option);
+        assert_eq!(
+            ovmf_filter_for_measurement(&patched).unwrap(),
+            ovmf_filter_for_measurement(&from_option).unwrap()
+        );
+    }
+
+    #[test]
+    fn fork_form_refuses_the_types_that_fork_measured_differently() {
+        let qemu_type1_only = hex!(
+            "011b000101000000000000000000000000000000000000000600005145" "4d5500007f04007f0000"
+        );
+        check_fork_form_measurable(&qemu_type1_only).unwrap();
+        for refused in [
+            hex!("0b05000b0100616200007f04007f0000").to_vec(),
+            hex!("8004008000007f04007f0000").to_vec(),
+            hex!("0004000000007f04007f0000").to_vec(),
+        ] {
+            assert!(check_fork_form_measurable(&refused).is_err());
+        }
     }
 
     #[test]

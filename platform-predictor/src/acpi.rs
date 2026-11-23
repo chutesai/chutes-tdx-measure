@@ -18,6 +18,7 @@ use crate::util::read_file_data;
 use crate::{BootConfig, ImageConfig, Machine, QemuShape};
 
 const DOCKERFILE_QEMU_ACPI_DUMP: &str = include_str!("../Dockerfile.qemu-acpi-dump");
+const PCI_BAR_STUB_C: &str = include_str!("../pci-bar-stub.c");
 const CONTAINER_NAME: &str = "acpi-tables-generator";
 const IMAGE_NAME: &str = "acpi-tables-generator";
 const OVMF_IN_CONTAINER: &str = "/usr/share/ovmf/OVMF.fd";
@@ -53,6 +54,7 @@ impl Machine<'_> {
                 self.metadata_path,
                 self.distribution,
                 self.qemu_version,
+                self.qemu_dsc_sha256,
                 self.qemu_source_url,
                 self.qemu_source_sha256,
             )?
@@ -114,29 +116,26 @@ impl Machine<'_> {
             .as_ref()
             .filter(|path| !path.is_empty())
             .map(PathBuf::from);
-        let generate_tables = || {
-            let tables = generate_acpi_tables_with_qemu_args(
-                boot_config,
-                self.distribution,
-                self.qemu_version,
-                self.qemu_source_url,
-                self.qemu_source_sha256,
-                maybe_acpi_tables_target.as_ref(),
-                maybe_smbios_tables_target.as_ref(),
-            )?;
-            self.process_acpi_tables(tables)
-        };
-        if self.create_acpi_table {
-            if self.direct_boot {
-                generate_tables()
-            } else {
-                Err(anyhow!(
-                    "ACPI table cannot be generated for `indirect_boot`"
-                ))
-            }
-        } else {
-            generate_tables()
+        if !self.create_acpi_table {
+            // Without --create-acpi-tables the tables are the ones the metadata names.
+            let target = maybe_acpi_tables_target
+                .context("boot_config.acpi_tables names no ACPI tables file")?;
+            return self.process_acpi_tables(read_file_data(&target.display().to_string())?);
         }
+        if !self.direct_boot {
+            bail!("ACPI table cannot be generated for `indirect_boot`");
+        }
+        let tables = generate_acpi_tables_with_qemu_args(
+            boot_config,
+            self.distribution,
+            self.qemu_version,
+            self.qemu_dsc_sha256,
+            self.qemu_source_url,
+            self.qemu_source_sha256,
+            maybe_acpi_tables_target.as_ref(),
+            maybe_smbios_tables_target.as_ref(),
+        )?;
+        self.process_acpi_tables(tables)
     }
 }
 
@@ -405,9 +404,12 @@ struct QemuPkg<'a> {
     /// `main` -> `pull-lp-source qemu $VERSION`
     /// `url`  -> download a source tarball from `url` and verify it against `sha256`
     source: &'static str,
-    /// Version handed to the source fetcher. For `main`/`ppa` the Dockerfile builds
-    /// only a version whose source package files it pins by sha256 (never an empty one).
+    /// Version handed to the source fetcher. For `main`/`ppa` the Dockerfile builds a version
+    /// whose source package files it pins by sha256, or one given with `dsc_sha256`.
     version: &'a str,
+    /// For `main`/`ppa`: the sha256 of the version's `.dsc` file, for a version the Dockerfile
+    /// does not pin; the `.dsc`'s Checksums-Sha256 field then pins the other source files.
+    dsc_sha256: Option<&'a str>,
     /// Immutable OCI digest of the base image (`sha256:...`).
     image_digest: &'static str,
     /// For `source == "url"`: the QEMU source-tarball URL and its expected
@@ -448,34 +450,68 @@ fn qemu_pkg_for<'a>(distribution: &str, version_override: Option<&'a str>) -> Re
     Ok(QemuPkg {
         source,
         version: version_override.unwrap_or(default_version),
+        dsc_sha256: None,
         image_digest,
         url: None,
         sha256: None,
     })
 }
 
-/// Builds the QEMU command line that the patched in-container QEMU will run to
-/// dump `etc/acpi/tables`. When `qemu` is `Some(_)`, the command is taken
-/// verbatim from the block plus the seven measurement-related core flags;
-/// nothing else is added implicitly. When `qemu` is `None`, the script falls
-/// back to the Canonical direct-boot defaults so Intel's reference scenario
-/// keeps working unchanged.
+/// Checks `--qemu-dsc-sha256`: 64 lowercase hex digits, for a `ppa` or `main` source package whose
+/// version the caller names (a Debian version: letters, digits and `.+~:-`).
+fn check_dsc_sha256(pkg: &QemuPkg, version: Option<&str>, dsc_sha256: &str) -> Result<()> {
+    if dsc_sha256.len() != 64
+        || !dsc_sha256
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+    {
+        bail!("--qemu-dsc-sha256 must be 64 lowercase hex digits, got {dsc_sha256:?}");
+    }
+    let Some(version) = version.filter(|version| !version.is_empty()) else {
+        bail!("--qemu-dsc-sha256 needs the QEMU source package version it pins");
+    };
+    if !version
+        .bytes()
+        .all(|b| b.is_ascii_alphanumeric() || b".+~:-".contains(&b))
+        || !version.as_bytes()[0].is_ascii_digit()
+    {
+        bail!("QEMU source package version {version:?} is not a Debian version");
+    }
+    if pkg.source != "ppa" && pkg.source != "main" {
+        bail!("--qemu-dsc-sha256 applies to a ppa or main source package");
+    }
+    Ok(())
+}
+
+// The VFIO stand-ins of `qemu.acpi_devices`. The general form is the dump QEMU's `pci-bar-stub`
+// (`pci-bar-stub.c`): `pci-bar-stub,bus=<bus>,addr=<addr>,bars=<layout>[,vendor=..][,device=..]
+// [,class=..]`. Three named presets keep their earlier `pci-testdev` spelling and stand for fixed
+// `pci-bar-stub` layouts, with pci-testdev's identity (1b36:0005, class 00ff) so the dumped tables
+// are the same bytes as before:
+//   `pci-testdev,membar=<MiB>M,membar-backed=off,x-rtxpro6000se=on,bus=<bus>,addr=<addr>`
+//       RTX PRO 6000 SE: BAR0 64 MiB, BAR2 <MiB> MiB, BAR4 32 MiB, all 64-bit prefetchable;
+//   `pci-testdev,membar=<MiB>M,membar-backed=off,x-h200=on,bus=<bus>,addr=<addr>`
+//       H200: BAR0 16 MiB, BAR2 <MiB> MiB, BAR4 32 MiB, all 64-bit prefetchable;
+//   `pci-testdev,membar-backed=off,x-nvswitch-ls10=on,bus=<bus>,addr=<addr>`
+//       LS10 NVSwitch: BAR0 32 MiB, 64-bit non-prefetchable.
+const BAR_STUB: &str = "pci-bar-stub";
+const BAR_STUB_KEYS: [&str; 6] = ["bus", "addr", "bars", "vendor", "device", "class"];
+const PRESET_GPU_MODES: [(&str, &str, &str); 2] = [
+    ("x-rtxpro6000se", "0:64M:p64", "4:32M:p64"),
+    ("x-h200", "0:16M:p64", "4:32M:p64"),
+];
+const PRESET_NVSWITCH_MODE: &str = "x-nvswitch-ls10";
+const PRESET_NVSWITCH_BARS: &str = "0:32M:m64";
+const PRESET_IDENTITY: &str = "vendor=0x1b36,device=0x0005,class=0x00ff";
+const PRESET_GPU_FIELDS: usize = 6;
+const PRESET_NVSWITCH_FIELDS: usize = 5;
+
 fn qemu_device_field<'a>(device: &'a str, key: &str) -> Option<&'a str> {
     device.split(',').skip(1).find_map(|field| {
         let (name, value) = field.split_once('=')?;
         (name == key).then_some(value)
     })
 }
-
-// The closed ACPI-surrogate forms: the GPU form
-// `pci-testdev,membar=<MiB>M,membar-backed=off,<gpu mode>=on,bus=<bus>,addr=<addr>` with
-// exactly one GPU mode, and the NVSwitch form
-// `pci-testdev,membar-backed=off,x-nvswitch-ls10=on,bus=<bus>,addr=<addr>` without a membar.
-// The modes are the patched QEMU's (`Dockerfile.qemu-acpi-dump`).
-const ACPI_SURROGATE_GPU_MODES: [&str; 2] = ["x-rtxpro6000se", "x-h200"];
-const ACPI_SURROGATE_NVSWITCH_MODE: &str = "x-nvswitch-ls10";
-const ACPI_SURROGATE_GPU_FIELDS: usize = 6;
-const ACPI_SURROGATE_NVSWITCH_FIELDS: usize = 5;
 
 /// The sorted property names of one `-device` value, or `None` when a property is not
 /// `name=value` or repeats.
@@ -504,57 +540,162 @@ fn is_exact_surrogate_form(surrogate: &str, field_count: usize, keys: &[&str]) -
         && actual.as_deref() == Some(expected.as_slice())
 }
 
-fn acpi_devices(qemu: &QemuShape) -> Result<&[String]> {
+/// Whether `device` is a `pci-bar-stub` `-device` value.
+pub(crate) fn is_bar_stub(device: &str) -> bool {
+    device.split(',').next() == Some(BAR_STUB)
+}
+
+/// The size of one BAR of a `pci-bar-stub` layout: decimal digits without a leading zero and an
+/// optional `K`, `M` or `G` suffix.
+fn bar_size(text: &str) -> Option<u64> {
+    let (digits, shift) = match text.as_bytes().last()? {
+        b'K' => (&text[..text.len() - 1], 10),
+        b'M' => (&text[..text.len() - 1], 20),
+        b'G' => (&text[..text.len() - 1], 30),
+        _ => (text, 0),
+    };
+    if digits.is_empty() || digits.starts_with('0') || !digits.bytes().all(|b| b.is_ascii_digit())
+    {
+        return None;
+    }
+    digits.parse::<u64>().ok()?.checked_mul(1u64 << shift)
+}
+
+/// Checks a `pci-bar-stub` `bars=` layout: `<index>:<size>:<kind>` entries separated by `;`, each
+/// index 0 to 5 once, a 64-bit BAR also taking the next index, each size a power of two (below
+/// 4 GiB for a 32-bit BAR) and each kind `m32`, `m64`, `p32` or `p64` (`p`: prefetchable).
+fn check_bar_layout(bars: &str) -> Result<()> {
+    let mut used = [false; 6];
+    for entry in bars.split(';') {
+        let fields: Vec<&str> = entry.split(':').collect();
+        let [index, size, kind] = fields.as_slice() else {
+            bail!("pci-bar-stub BAR {entry:?} is not <index>:<size>:<kind>");
+        };
+        let index: usize = match index.as_bytes() {
+            [digit @ b'0'..=b'5'] => (digit - b'0') as usize,
+            _ => bail!("pci-bar-stub BAR index {index:?} is not 0 to 5"),
+        };
+        let wide = match *kind {
+            "m32" | "p32" => false,
+            "m64" | "p64" => true,
+            _ => bail!("pci-bar-stub BAR kind {kind:?} is not m32, m64, p32 or p64"),
+        };
+        let size = bar_size(size)
+            .filter(|size| size.is_power_of_two())
+            .with_context(|| format!("pci-bar-stub BAR size {size:?} is not a power of two"))?;
+        if !wide && size >= 1u64 << 32 {
+            bail!("pci-bar-stub 32-bit BAR {entry:?} is 4 GiB or larger");
+        }
+        let slots = if wide { index..index + 2 } else { index..index + 1 };
+        if slots.end > used.len() || slots.clone().any(|slot| used[slot]) {
+            bail!("pci-bar-stub BAR {entry:?} overlaps another BAR or passes BAR5");
+        }
+        for slot in slots {
+            used[slot] = true;
+        }
+    }
+    Ok(())
+}
+
+/// Checks one `pci-bar-stub` `-device` value: properties among bus, addr, bars (required), vendor,
+/// device and class, none repeated; a valid `bars` layout; `vendor`, `device` and `class` as
+/// `0x` and four hex digits.
+pub(crate) fn check_bar_stub(device: &str) -> Result<()> {
+    if !is_bar_stub(device) {
+        bail!("{device:?} is not a {BAR_STUB} device");
+    }
+    let keys = qemu_device_keys(device)
+        .with_context(|| format!("{device:?}: each property must be name=value, once"))?;
+    if let Some(key) = keys.iter().find(|key| !BAR_STUB_KEYS.contains(key)) {
+        bail!("{device:?}: {BAR_STUB} takes no {key:?} (only {BAR_STUB_KEYS:?})");
+    }
+    let bars = qemu_device_field(device, "bars")
+        .with_context(|| format!("{device:?}: {BAR_STUB} needs bars="))?;
+    check_bar_layout(bars).with_context(|| format!("{device:?}"))?;
+    for key in ["vendor", "device", "class"] {
+        if let Some(value) = qemu_device_field(device, key) {
+            let hex_digits = value.strip_prefix("0x").unwrap_or_default();
+            if hex_digits.len() != 4 || !hex_digits.bytes().all(|b| b.is_ascii_hexdigit()) {
+                bail!("{device:?}: {key}={value} is not 0x and four hex digits");
+            }
+        }
+    }
+    Ok(())
+}
+
+/// The `pci-bar-stub` a named preset stands for, or `None` when `surrogate` is no preset.
+fn preset_bar_stub(surrogate: &str) -> Result<Option<String>> {
+    let bus = qemu_device_field(surrogate, "bus").unwrap_or_default();
+    let addr = qemu_device_field(surrogate, "addr").unwrap_or_default();
+    let gpu = PRESET_GPU_MODES
+        .iter()
+        .find(|(mode, ..)| qemu_device_field(surrogate, mode) == Some("on"));
+    if let Some((mode, bar0, bar4)) = gpu {
+        if !is_exact_surrogate_form(
+            surrogate,
+            PRESET_GPU_FIELDS,
+            &["membar", "membar-backed", mode, "bus", "addr"],
+        ) {
+            return Ok(None);
+        }
+        let membar_mib = qemu_device_field(surrogate, "membar")
+            .and_then(|value| value.strip_suffix('M'))
+            .and_then(|value| value.parse::<u64>().ok())
+            .filter(|value| *value > 0)
+            .ok_or_else(|| anyhow!("VFIO ACPI surrogate membar must be positive MiB"))?;
+        return Ok(Some(format!(
+            "{BAR_STUB},bus={bus},addr={addr},bars={bar0};2:{membar_mib}M:p64;{bar4},\
+             {PRESET_IDENTITY}"
+        )));
+    }
+    if qemu_device_field(surrogate, PRESET_NVSWITCH_MODE) == Some("on")
+        && is_exact_surrogate_form(
+            surrogate,
+            PRESET_NVSWITCH_FIELDS,
+            &["membar-backed", PRESET_NVSWITCH_MODE, "bus", "addr"],
+        )
+    {
+        return Ok(Some(format!(
+            "{BAR_STUB},bus={bus},addr={addr},bars={PRESET_NVSWITCH_BARS},{PRESET_IDENTITY}"
+        )));
+    }
+    Ok(None)
+}
+
+/// The device list the dump runs: `qemu.devices`, or `qemu.acpi_devices` with every preset
+/// replaced by the `pci-bar-stub` it stands for.
+fn acpi_devices(qemu: &QemuShape) -> Result<Vec<String>> {
     let Some(acpi_devices) = qemu.acpi_devices.as_deref() else {
-        return Ok(&qemu.devices);
+        return Ok(qemu.devices.clone());
     };
     if acpi_devices.len() != qemu.devices.len() {
         bail!("qemu.acpi_devices must align one-for-one with qemu.devices");
     }
+    let mut out = Vec::with_capacity(acpi_devices.len());
     let mut replacements = 0usize;
     for (live, surrogate) in qemu.devices.iter().zip(acpi_devices) {
         if !live.starts_with("vfio-pci,") {
             if surrogate != live {
                 bail!("qemu.acpi_devices may not alter a non-VFIO device");
             }
+            out.push(surrogate.clone());
             continue;
         }
         replacements += 1;
-        let gpu_mode = ACPI_SURROGATE_GPU_MODES
-            .iter()
-            .copied()
-            .find(|mode| qemu_device_field(surrogate, mode) == Some("on"));
-        let gpu_form = match gpu_mode {
-            Some(mode) => is_exact_surrogate_form(
-                surrogate,
-                ACPI_SURROGATE_GPU_FIELDS,
-                &["membar", "membar-backed", mode, "bus", "addr"],
-            ),
-            None => false,
+        let stand_in = if is_bar_stub(surrogate) {
+            check_bar_stub(surrogate)?;
+            surrogate.clone()
+        } else {
+            preset_bar_stub(surrogate)?.ok_or_else(|| {
+                anyhow!(
+                    "each VFIO ACPI surrogate must be one {BAR_STUB} (bus, addr, bars and \
+                     optionally vendor, device, class) or one named preset: the GPU form \
+                     (pci-testdev, membar=<MiB>M, membar-backed=off, exactly one of \
+                     x-rtxpro6000se=on or x-h200=on, bus, addr) or the NVSwitch form \
+                     (pci-testdev, membar-backed=off, x-nvswitch-ls10=on, bus, addr; no membar)"
+                )
+            })?
         };
-        let nvswitch_form = qemu_device_field(surrogate, ACPI_SURROGATE_NVSWITCH_MODE)
-            == Some("on")
-            && is_exact_surrogate_form(
-                surrogate,
-                ACPI_SURROGATE_NVSWITCH_FIELDS,
-                &["membar-backed", ACPI_SURROGATE_NVSWITCH_MODE, "bus", "addr"],
-            );
-        if !gpu_form && !nvswitch_form {
-            bail!(
-                "each VFIO ACPI surrogate must be one unbacked pci-testdev endpoint in one of two \
-                 forms: the GPU form (membar=<MiB>M, membar-backed=off, exactly one of \
-                 x-rtxpro6000se=on or x-h200=on, bus, addr) or the NVSwitch form \
-                 (membar-backed=off, x-nvswitch-ls10=on, bus, addr; no membar)"
-            );
-        }
-        if gpu_form {
-            let membar_mib = qemu_device_field(surrogate, "membar")
-                .and_then(|value| value.strip_suffix('M'))
-                .and_then(|value| value.parse::<u64>().ok())
-                .filter(|value| *value > 0)
-                .ok_or_else(|| anyhow!("VFIO ACPI surrogate membar must be positive MiB"))?;
-            let _ = membar_mib;
-        }
         for field in ["bus", "addr"] {
             if qemu_device_field(live, field).is_none()
                 || qemu_device_field(live, field) != qemu_device_field(surrogate, field)
@@ -567,14 +708,21 @@ fn acpi_devices(qemu: &QemuShape) -> Result<&[String]> {
         {
             bail!("VFIO ACPI surrogate must not carry host or iommufd authority");
         }
+        out.push(stand_in);
     }
     if replacements == 0 {
         bail!("qemu.acpi_devices requires at least one VFIO replacement");
     }
-    Ok(acpi_devices)
+    Ok(out)
 }
 
-fn build_qemu_args(qemu: Option<&QemuShape>, cpus: u8, memory: &str) -> Result<Vec<OsString>> {
+/// Builds the QEMU command line that the patched in-container QEMU will run to
+/// dump `etc/acpi/tables`. When `qemu` is `Some(_)`, the command is taken
+/// verbatim from the block plus the seven measurement-related core flags;
+/// nothing else is added implicitly. When `qemu` is `None`, the script falls
+/// back to the Canonical direct-boot defaults so Intel's reference scenario
+/// keeps working unchanged.
+fn build_qemu_args(qemu: Option<&QemuShape>, cpus: u32, memory: &str) -> Result<Vec<OsString>> {
     let mut args: Vec<OsString> = Vec::new();
     let push = |args: &mut Vec<OsString>, k: &str, v: &str| {
         args.push(k.into());
@@ -614,7 +762,7 @@ fn build_qemu_args(qemu: Option<&QemuShape>, cpus: u8, memory: &str) -> Result<V
                 push(&mut args, "-netdev", v);
             }
             for v in acpi_devices(q)? {
-                push(&mut args, "-device", v);
+                push(&mut args, "-device", &v);
             }
             for v in &q.fw_cfg {
                 push(&mut args, "-fw_cfg", v);
@@ -622,7 +770,7 @@ fn build_qemu_args(qemu: Option<&QemuShape>, cpus: u8, memory: &str) -> Result<V
             for v in &q.smbios {
                 push(&mut args, "-smbios", v);
             }
-            if let Some(serial) = &q.serial {
+            for serial in q.serial_ports() {
                 push(&mut args, "-serial", serial);
             }
         }
@@ -692,12 +840,14 @@ fn kvm_group_id() -> Option<String> {
         .and_then(|line| line.split(':').nth(2).map(str::to_owned))
 }
 
+/// Builds the dump image and returns its image ID, which the run then names: the image this run
+/// built, whatever another run tags `acpi-tables-generator` meanwhile.
 fn build_docker_image(
     dockerfile_dir: &Path,
     distribution: &str,
     pkg: &QemuPkg,
     acpi_tables_name: &str,
-) -> Result<()> {
+) -> Result<String> {
     info!("Building Docker image: {IMAGE_NAME}");
     match pkg.source {
         "ppa" => info!(
@@ -740,6 +890,11 @@ fn build_docker_image(
         .arg(format!("QEMU_VERSION={}", pkg.version))
         .arg("--build-arg")
         .arg(format!("ACPI_TABLES_NAME={acpi_tables_name}"));
+    if let Some(dsc_sha256) = pkg.dsc_sha256 {
+        info!("QEMU source package {}: .dsc sha256 {dsc_sha256}", pkg.version);
+        cmd.arg("--build-arg")
+            .arg(format!("QEMU_DSC_SHA256={dsc_sha256}"));
+    }
     if pkg.source == "url" {
         cmd.arg("--build-arg").arg(format!(
             "QEMU_URL={}",
@@ -751,7 +906,10 @@ fn build_docker_image(
                 .expect("Missing QEMU sha256 hash for source type `url`")
         ));
     }
+    let iidfile = dockerfile_dir.join("image-id");
     let status = cmd
+        .arg("--iidfile")
+        .arg(&iidfile)
         .arg("--file")
         .arg(dockerfile_dir.join("Dockerfile.qemu-acpi-dump"))
         .arg(dockerfile_dir)
@@ -760,7 +918,11 @@ fn build_docker_image(
     if !status.success() {
         bail!("docker build failed (exit {status})");
     }
-    Ok(())
+    let image_id = fs_err::read_to_string(&iidfile)?.trim().to_string();
+    if !image_id.starts_with("sha256:") {
+        bail!("docker build wrote no image ID: {image_id:?}");
+    }
+    Ok(image_id)
 }
 
 /// The dump container's name for one run: the fixed prefix plus the basename of the run's private
@@ -775,6 +937,7 @@ fn dump_container_name(output_dir: &Path) -> Result<String> {
 }
 
 fn run_docker_container(
+    image: &str,
     bios: &Path,
     output_dir: &Path,
     qemu_args: &[OsString],
@@ -817,7 +980,7 @@ fn run_docker_container(
         .arg(format!("{}:{OVMF_IN_CONTAINER}:ro", bios.display()));
     cmd.arg("-v")
         .arg(format!("{}:/output", output_dir.display()));
-    cmd.arg(IMAGE_NAME);
+    cmd.arg(image);
     cmd.args(qemu_args);
 
     let status = cmd.status().context("Failed to invoke `docker run`")?;
@@ -835,13 +998,12 @@ pub fn generate_acpi_tables(
     metadata_path: &Path,
     distribution: &str,
     qemu_version: Option<&str>,
+    qemu_dsc_sha256: Option<&str>,
     qemu_source_url: Option<&str>,
     qemu_source_sha256: Option<&str>,
 ) -> Result<Vec<u8>> {
-    let raw_metadata = fs_err::read_to_string(metadata_path)
-        .context("Failed to read metadata.json for ACPI generation")?;
-    let image_config: ImageConfig = serde_json::from_str(&raw_metadata)
-        .context("Failed to parse metadata.json for ACPI generation")?;
+    let image_config = ImageConfig::load(metadata_path)
+        .context("Failed to load metadata.json for ACPI generation")?;
     let mut boot_config = image_config
         .boot_config
         .clone()
@@ -869,6 +1031,7 @@ pub fn generate_acpi_tables(
         &boot_config,
         distribution,
         qemu_version,
+        qemu_dsc_sha256,
         qemu_source_url,
         qemu_source_sha256,
         Some(&acpi_tables_target),
@@ -880,21 +1043,30 @@ pub fn generate_acpi_tables(
 /// patched-QEMU Docker container. The patched QEMU writes the
 /// `etc/acpi/tables` blob it would have exposed via fw_cfg to
 /// `boot_config.acpi_tables` and exits before TD entry.
+#[allow(clippy::too_many_arguments)]
 pub fn generate_acpi_tables_with_qemu_args(
     boot_config: &BootConfig,
     distribution: &str,
     maybe_qemu_version: Option<&str>,
+    maybe_qemu_dsc_sha256: Option<&str>,
     maybe_qemu_source_url: Option<&str>,
     maybe_qemu_source_sha256: Option<&str>,
     maybe_acpi_tables_target: Option<&PathBuf>,
     maybe_smbios_tables_target: Option<&PathBuf>,
 ) -> Result<Vec<u8>> {
     let mut pkg = qemu_pkg_for(distribution, maybe_qemu_version)?;
+    if let Some(dsc_sha256) = maybe_qemu_dsc_sha256 {
+        check_dsc_sha256(&pkg, maybe_qemu_version, dsc_sha256)?;
+        pkg.dsc_sha256 = Some(dsc_sha256);
+    }
     // When a source URL + SHA-256 are supplied, build QEMU from that tarball
     // (hash-verified) instead of the distribution's PPA/main package. Both must
     // be provided together.
     match (maybe_qemu_source_url, maybe_qemu_source_sha256) {
         (Some(url), Some(sha256)) => {
+            if pkg.dsc_sha256.is_some() {
+                bail!("--qemu-dsc-sha256 names a source package; --qemu-source-url a tarball");
+            }
             pkg.source = "url";
             pkg.url = Some(url);
             pkg.sha256 = Some(sha256);
@@ -935,13 +1107,21 @@ pub fn generate_acpi_tables_with_qemu_args(
         build_ctx.path().join("Dockerfile.qemu-acpi-dump"),
         DOCKERFILE_QEMU_ACPI_DUMP,
     )?;
-    build_docker_image(build_ctx.path(), distribution, &pkg, acpi_tables_name)?;
+    fs_err::write(build_ctx.path().join("pci-bar-stub.c"), PCI_BAR_STUB_C)?;
 
     let qemu_args = build_qemu_args(
         boot_config.qemu.as_ref(),
         boot_config.cpus,
         &boot_config.memory,
     )?;
+    if pkg.source == "ppa" && qemu_args.iter().any(|arg| arg.to_str().is_some_and(is_bar_stub)) {
+        bail!(
+            "{BAR_STUB} (and the named presets) needs QEMU 10.1 or later; {distribution} builds \
+             QEMU {}",
+            pkg.version
+        );
+    }
+    let image = build_docker_image(build_ctx.path(), distribution, &pkg, acpi_tables_name)?;
     let need_kvm = boot_config
         .qemu
         .as_ref()
@@ -951,6 +1131,7 @@ pub fn generate_acpi_tables_with_qemu_args(
     prepare_output_drives(boot_config.qemu.as_ref(), output_dir.path())?;
 
     run_docker_container(
+        &image,
         &bios,
         output_dir.path(),
         &qemu_args,
@@ -983,7 +1164,21 @@ pub fn generate_acpi_tables_with_qemu_args(
         if let Some(parent) = smbios_tables_target.parent() {
             fs_err::create_dir_all(parent)?;
         }
-        fs_err::copy(&generated_smbios_tables, smbios_tables_target)?;
+        let mut smbios = fs_err::read(&generated_smbios_tables)?;
+        if let Some(processor_id) = boot_config
+            .qemu
+            .as_ref()
+            .map(QemuShape::processor_id_bytes)
+            .transpose()?
+            .flatten()
+        {
+            crate::smbios::patch_type4_processor_id(&mut smbios, &processor_id)?;
+            info!(
+                "SMBIOS Type-4 Processor ID set to {}",
+                hex::encode(processor_id)
+            );
+        }
+        fs_err::write(smbios_tables_target, &smbios)?;
         fs_err::set_permissions(smbios_tables_target, std::fs::Permissions::from_mode(0o644))?;
         info!(
             "SMBIOS tables written to: {}",
@@ -1443,6 +1638,7 @@ mod tests {
             fw_cfg: vec!["name=opt/ovmf/X-PciMmio64Mb,string=262144".into()],
             smbios: vec!["type=4,processor-id=1".into()],
             serial: None,
+            processor_id: None,
         };
         let args = build_qemu_args(Some(&shape), 8, "16384M")
             .unwrap()
@@ -1514,13 +1710,19 @@ mod tests {
             fw_cfg: vec![],
             smbios: vec![],
             serial: None,
+            processor_id: None,
         };
         let args = build_qemu_args(Some(&shape), 14, "114688M")
             .unwrap()
             .into_iter()
             .map(|value| value.into_string().unwrap())
             .collect::<Vec<_>>();
-        assert!(args.contains(&surrogate.to_string()));
+        assert!(args.contains(
+            &"pci-bar-stub,bus=rp1,addr=0x0,bars=0:64M:p64;2:131072M:p64;4:32M:p64,\
+              vendor=0x1b36,device=0x0005,class=0x00ff"
+                .to_string()
+        ));
+        assert!(!args.contains(&surrogate.to_string()));
         assert!(!args.contains(&live_vfio.to_string()));
 
         let mut bad = shape.clone();
@@ -1552,6 +1754,7 @@ mod tests {
             fw_cfg: vec![],
             smbios: vec![],
             serial: None,
+            processor_id: None,
         };
         for accepted in [
             "pci-testdev,membar=262144M,membar-backed=off,x-rtxpro6000se=on,bus=rp9,addr=0x0",
@@ -1580,5 +1783,111 @@ mod tests {
         ] {
             assert!(acpi_devices(&shape_with(refused)).is_err(), "{refused}");
         }
+    }
+
+    /// Each named preset is the pci-bar-stub of its BAR layout, with pci-testdev's identity.
+    #[test]
+    fn presets_are_fixed_bar_stub_layouts() {
+        for (preset, stub) in [
+            (
+                "pci-testdev,membar=131072M,membar-backed=off,x-rtxpro6000se=on,bus=rp1,addr=0x0",
+                "pci-bar-stub,bus=rp1,addr=0x0,bars=0:64M:p64;2:131072M:p64;4:32M:p64,\
+                 vendor=0x1b36,device=0x0005,class=0x00ff",
+            ),
+            (
+                "pci-testdev,membar=262144M,membar-backed=off,x-h200=on,bus=rp2,addr=0x0",
+                "pci-bar-stub,bus=rp2,addr=0x0,bars=0:16M:p64;2:262144M:p64;4:32M:p64,\
+                 vendor=0x1b36,device=0x0005,class=0x00ff",
+            ),
+            (
+                "pci-testdev,membar-backed=off,x-nvswitch-ls10=on,bus=rp_nvsw1,addr=0x0",
+                "pci-bar-stub,bus=rp_nvsw1,addr=0x0,bars=0:32M:m64,\
+                 vendor=0x1b36,device=0x0005,class=0x00ff",
+            ),
+        ] {
+            assert_eq!(preset_bar_stub(preset).unwrap().as_deref(), Some(stub));
+            check_bar_stub(stub).unwrap();
+        }
+    }
+
+    #[test]
+    fn a_general_bar_stub_stands_in_for_a_vfio_endpoint() {
+        let live_root = "pcie-root-port,port=16,chassis=1,id=rp1,bus=pcie.0,addr=0x8";
+        let live_vfio = "vfio-pci,host=0000:01:00.0,bus=rp1,addr=0x0,iommufd=iommufd0";
+        let stub = "pci-bar-stub,bus=rp1,addr=0x0,bars=0:64M:p64;2:512G:p64;4:32M:p64,\
+                    vendor=0x10de,device=0x3182,class=0x0302";
+        let shape = QemuShape {
+            machine: "pc-q35-10.2".into(),
+            memory: None,
+            smp: None,
+            cpu: "max,phys-bits=46".into(),
+            accel: "tcg".into(),
+            globals: vec![],
+            objects: vec![],
+            numa: vec![],
+            drives: vec![],
+            netdevs: vec![],
+            devices: vec![live_root.into(), live_vfio.into()],
+            acpi_devices: Some(vec![live_root.into(), stub.into()]),
+            fw_cfg: vec![],
+            smbios: vec![],
+            serial: Some(crate::SerialPorts::List(vec!["null".into(), "null".into()])),
+            processor_id: None,
+        };
+        assert_eq!(acpi_devices(&shape).unwrap(), vec![live_root.to_string(), stub.to_string()]);
+        let args = build_qemu_args(Some(&shape), 300, "8G").unwrap();
+        let serials = args.windows(2).filter(|pair| pair[0] == "-serial").count();
+        assert_eq!(serials, 2);
+        assert!(args.contains(&OsString::from("300,maxcpus=300")));
+
+        let mut moved = shape.clone();
+        moved.acpi_devices = Some(vec![
+            live_root.into(),
+            stub.replace("addr=0x0", "addr=0x1"),
+        ]);
+        assert!(acpi_devices(&moved).is_err());
+    }
+
+    #[test]
+    fn bar_stub_values_are_checked() {
+        for accepted in [
+            "pci-bar-stub,bus=rp1,bars=0:16M:p64;2:256G:p64;4:32M:p64,vendor=0x10de,device=0x2335,class=0x0302",
+            "pci-bar-stub,bus=rp_nvsw1,bars=0:32M:m64,vendor=0x10de,device=0x22a3,class=0x0680",
+            "pci-bar-stub,bars=0:4K:m32;1:16M:p32;2:1G:m64",
+        ] {
+            check_bar_stub(accepted).unwrap_or_else(|err| panic!("{accepted}: {err:#}"));
+        }
+        for refused in [
+            "pci-bar-stub,bus=rp1",
+            "pci-bar-stub,bus=rp1,bars=",
+            "pci-bar-stub,bus=rp1,bars=6:16M:m32",
+            "pci-bar-stub,bus=rp1,bars=0:24M:m32",
+            "pci-bar-stub,bus=rp1,bars=0:016M:m32",
+            "pci-bar-stub,bus=rp1,bars=0:16m:m32",
+            "pci-bar-stub,bus=rp1,bars=0:4G:m32",
+            "pci-bar-stub,bus=rp1,bars=0:16M:x64",
+            "pci-bar-stub,bus=rp1,bars=0:16M:p64;1:16M:m32",
+            "pci-bar-stub,bus=rp1,bars=5:16M:p64",
+            "pci-bar-stub,bus=rp1,bars=0:16M:m32;0:16M:m32",
+            "pci-bar-stub,bus=rp1,bars=0:16M:m32,vendor=10de",
+            "pci-bar-stub,bus=rp1,bars=0:16M:m32,class=0x302",
+            "pci-bar-stub,bus=rp1,bars=0:16M:m32,host=0000:01:00.0",
+            "pci-bar-stub,bus=rp1,bus=rp2,bars=0:16M:m32",
+        ] {
+            assert!(check_bar_stub(refused).is_err(), "{refused}");
+        }
+    }
+
+    #[test]
+    fn dsc_sha256_needs_a_package_version_and_hex() {
+        let pkg = qemu_pkg_for("ubuntu:26.04", Some("1:10.2.1+ds-1ubuntu3.1")).unwrap();
+        let sha = "a".repeat(64);
+        check_dsc_sha256(&pkg, Some("1:10.2.1+ds-1ubuntu3.1"), &sha).unwrap();
+        assert!(check_dsc_sha256(&pkg, None, &sha).is_err());
+        assert!(check_dsc_sha256(&pkg, Some(""), &sha).is_err());
+        assert!(check_dsc_sha256(&pkg, Some("../10.2.1"), &sha).is_err());
+        assert!(check_dsc_sha256(&pkg, Some("10.2.1 x"), &sha).is_err());
+        assert!(check_dsc_sha256(&pkg, Some("1:10.2.1"), &"A".repeat(64)).is_err());
+        assert!(check_dsc_sha256(&pkg, Some("1:10.2.1"), &"a".repeat(63)).is_err());
     }
 }

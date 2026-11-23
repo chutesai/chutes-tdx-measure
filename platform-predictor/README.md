@@ -24,7 +24,7 @@ fetch the test firmware. Every cargo command runs in the digest-pinned Rust imag
 
 ```sh
 make build   # target/chutes/tdx-measure and target/chutes/tdx-measure.sha256
-make test    # the library's unit tests, tests/parse.rs and tests/chutes.rs
+make test    # the library's unit tests, tests/parse.rs, tests/chutes.rs and tests/forms.rs
 make repro   # two independent builds; their sha256 must be equal
 ```
 
@@ -50,8 +50,12 @@ tdx-measure [OPTIONS] <METADATA>
                                     Generate ACPI tables for direct boot. <DISTRIBUTION> is one of
                                     ubuntu:24.04, ubuntu:25.04, ubuntu:25.10, ubuntu:26.04. <QEMU_VERSION>
                                     overrides the pinned QEMU source package version for that
-                                    distribution; a version builds only when Dockerfile.qemu-acpi-dump
-                                    pins its source package files by sha256 (below)
+                                    distribution; a version builds when Dockerfile.qemu-acpi-dump
+                                    pins its source package files by sha256, or with
+                                    --qemu-dsc-sha256 (below)
+      --qemu-dsc-sha256 <HEX>       The sha256 of the .dsc file of <QEMU_VERSION>, a version
+                                    Dockerfile.qemu-acpi-dump does not pin; the files the .dsc lists
+                                    must have the sha256 its Checksums-Sha256 field gives
       --patch-kernel                Apply QEMU-style kernel boot-params patching before measuring RTMR1.
                                     Without it the kernel is measured as-is (Ubuntu 26.04 and later,
                                     whose kernels are loaded through the EFI stub); pass it for older
@@ -100,10 +104,38 @@ With `--runtime-only` the tool assumes a VM memory size above 2.75 GB.
 
 Relative paths are resolved against the directory of the metadata file.
 
+#### Metadata forms
+
+Every field below is one the tool reads; a document with any other field is refused, in every form.
+A document is in one of three forms:
+
+- **Version 1**, with `"metadata_version": 1` at the top level. A direct boot must name
+  `boot_config.firmware_profile`, `qemu.serial` is a list, a `qemu.processor_id` is 16 hex digits
+  (omit it rather than set it `null`), and every `pci-bar-stub` in `devices` or `acpi_devices` is
+  checked before QEMU runs. New documents should use this form.
+- **Legacy**, without `metadata_version`: the form this tool read before versions, with the same
+  meaning. A direct boot whose `firmware_profile` is not `edk2-stable202605` (absent included)
+  measures the `edk2-stable202502` sequence, BootOrder and Boot0000 after the ACPI tables, and
+  `qemu.serial` is one string.
+- **chutesai/tdx-measure**, without `metadata_version` and with `qemu.processor_id` (a `null` value
+  counts) or a `qemu.serial` list, fields only the
+  [chutesai/tdx-measure](https://github.com/chutesai/tdx-measure) fork read. Such a document
+  measures what that fork measured: a direct boot follows the `edk2-stable202605` sequence whatever
+  `firmware_profile` says (it may only be absent or `edk2-stable202605`), `etc/extra-pci-roots`
+  counts the `devices` entries whose text contains `pxb-pcie`, and the SMBIOS tables go to
+  `smbios-tables` in the directory of `acpi_tables` unless `smbios_tables` names a path. The SMBIOS
+  tables must hold no Type 0, 11, 15, 18, 31, 33 or 128-and-above structure, the types that fork
+  measured differently from the firmware; such a document needs version 1.
+  `tools/fork-equivalence.py` (below) compares the two tools on any set of host profiles.
+
+The legacy forms have no field the tool accepts and ignores: each field they can carry is listed
+below and read.
+
 #### Metadata fields
 
+- `metadata_version` *(optional)*: `1` for the version 1 form.
 - `boot_config`: the platform configuration, which determines MRTD and RTMR0.
-  - `cpus`: the number of virtual CPUs of the TD.
+  - `cpus`: the number of virtual CPUs of the TD (up to 2^32 - 1).
   - `memory`: the TD's memory (for example `"2G"`).
   - `bios`: the virtual firmware (TDVF, for example `OVMF.fd`) that boots the TD. Canonical's TDX
     host setup ([instructions](https://github.com/canonical/tdx/tree/main?tab=readme-ov-file#4-setup-host-os))
@@ -120,10 +152,12 @@ Relative paths are resolved against the directory of the metadata file.
     it from a TD.
   - `smbios_tables` *(optional)*: where `--create-acpi-tables` writes the SMBIOS tables QEMU serves
     over fw_cfg, and where RTMR0 reads them with `firmware_profile` `edk2-stable202605`.
-  - `firmware_profile` *(optional)*: `edk2-stable202605` selects that firmware's RTMR0 event
-    sequence, the one Chutes' TDVF follows: `etc/extra-pci-roots` when expander root buses exist,
-    the fixed direct-boot fw_cfg payloads, the EFI variables and separators, the ACPI blobs, and the
-    SMBIOS tables as OVMF completes and filters them. It needs `smbios_tables`.
+  - `firmware_profile` *(required for a version 1 direct boot)*: the firmware's direct-boot RTMR0
+    event sequence. `edk2-stable202605`, the one Chutes' TDVF follows: `etc/extra-pci-roots` when
+    expander root buses exist, the fixed direct-boot fw_cfg payloads, the EFI variables and
+    separators, the ACPI blobs, and the SMBIOS tables as OVMF completes and filters them; it needs
+    `smbios_tables`. `edk2-stable202502`, the one Ubuntu's OVMF 2025.02 follows: the EFI variables
+    and separators, the ACPI blobs, BootOrder and Boot0000.
   - `qemu` *(optional)*: the QEMU launch shape that `--create-acpi-tables` runs. When present, the
     QEMU command line is `-accel -m -smp -cpu -no-reboot -nodefaults -vga none -nographic -bios
     -machine` followed by the lists below, in this order; nothing else is added. When absent, the
@@ -139,7 +173,14 @@ Relative paths are resolved against the directory of the metadata file.
     - `globals`, `objects`, `numa`, `drives`, `netdevs`, `devices`, `fw_cfg`, `smbios`: lists of
       strings, each emitted as `-global`, `-object`, `-numa`, `-drive`, `-netdev`, `-device`,
       `-fw_cfg` and `-smbios` respectively.
-    - `serial`: passed verbatim to `-serial`.
+    - `serial`: a list, each value emitted as `-serial` (a legacy document may give one string).
+    - `processor_id` *(optional)*: the SMBIOS Type-4 Processor ID, 8 bytes as 16 hex digits (CPUID
+      leaf 1 EAX then EDX, little-endian), written into every Type-4 structure of the dumped SMBIOS
+      tables before RTMR0 measures them. Under KVM the dumping host's CPUID reaches that field
+      unless the launch sets it; `processor_id` gives the launch host's value instead. A launch
+      that fixes it with `-smbios type=4,processor-id=N` needs no `processor_id`: the same
+      `-smbios` value in `smbios` gives the same bytes (`processor-id=1` is
+      `0100000000000000`).
 
     **The order of `devices` is part of the measurement.** QEMU assigns PCI slots to `-device`
     arguments in command-line order, each taking the lowest free slot, so `devices` must list them
@@ -148,13 +189,27 @@ Relative paths are resolved against the directory of the metadata file.
     not change the ACPI tables.
     - `acpi_devices` *(optional)*: a hardware-free device list for the ACPI dump, aligned one for
       one with `devices`. Every non-VFIO entry stays byte-identical. Every `vfio-pci` endpoint is
-      replaced by an unbacked `pci-testdev` with the same `bus` and `addr`, in one of two forms: the
-      GPU form `pci-testdev,membar=<MiB>M,membar-backed=off,<mode>=on,bus=<bus>,addr=<addr>` with a
-      positive `membar` and exactly one GPU mode (`x-rtxpro6000se`: BAR0 64 MiB and BAR4 32 MiB;
-      `x-h200`: BAR0 16 MiB and BAR4 32 MiB; both 64-bit prefetchable, no I/O BAR), or the NVSwitch
-      form `pci-testdev,membar-backed=off,x-nvswitch-ls10=on,bus=<bus>,addr=<addr>` (one 32 MiB
-      64-bit non-prefetchable BAR0, no `membar`). Such a prediction is provisional: the RTMR0 of the
-      target hardware confirms it.
+      replaced by a stand-in with the same `bus` and `addr` (below). Such a prediction is
+      provisional: the RTMR0 of the target hardware confirms it.
+
+    **Stand-ins for passed-through devices.** The dump image's QEMU has `pci-bar-stub`
+    (`pci-bar-stub.c`, from chutesai/tdx-measure), a PCI device with a declared BAR layout and no
+    backing memory, so the dump runs without the device:
+    `pci-bar-stub,bus=<bus>,addr=<addr>,bars=<layout>[,vendor=0xVVVV][,device=0xDDDD][,class=0xCCCC]`.
+    `bars` lists `<index>:<size>:<kind>` entries separated by `;`: an index from 0 to 5 (a 64-bit BAR
+    also takes the next one), a power-of-two size in bytes with an optional `K`, `M` or `G` suffix,
+    and a kind, `m32`, `m64`, `p32` or `p64` (`m`: non-prefetchable, `p`: prefetchable). `vendor`,
+    `device` and `class` default to 1b36:0010, class 0880. A host's captured BARs give the layout,
+    for example an H200: `bars=0:16M:p64;2:256G:p64;4:32M:p64,vendor=0x10de,device=0x2335,class=0x0302`.
+    `pci-bar-stub` is built into QEMU 10.1 and later (`ubuntu:25.10`, `ubuntu:26.04`). In
+    `acpi_devices` three named presets stand for fixed layouts, with pci-testdev's identity
+    (1b36:0005, class 00ff); their dumped tables are the bytes the earlier pci-testdev modes gave:
+
+    | Preset | Stands for |
+    |---|---|
+    | `pci-testdev,membar=<MiB>M,membar-backed=off,x-rtxpro6000se=on,bus=<bus>,addr=<addr>` | `bars=0:64M:p64;2:<MiB>M:p64;4:32M:p64` (RTX PRO 6000 SE) |
+    | `pci-testdev,membar=<MiB>M,membar-backed=off,x-h200=on,bus=<bus>,addr=<addr>` | `bars=0:16M:p64;2:<MiB>M:p64;4:32M:p64` (H200) |
+    | `pci-testdev,membar-backed=off,x-nvswitch-ls10=on,bus=<bus>,addr=<addr>` | `bars=0:32M:m64` (LS10 NVSwitch) |
 
 - `direct`: the direct-boot configuration, which determines RTMR1 and RTMR2.
   - `kernel`: the kernel image (for example `vmlinuz`) that the firmware loads and runs. Canonical's
@@ -191,9 +246,21 @@ overrides the version, for example to check a stable release update:
 
 A version string names a Launchpad publication, not its bytes, so `Dockerfile.qemu-acpi-dump` pins
 the three source package files (`.dsc`, `.orig.tar.xz`, `.debian.tar.xz`) of every version it builds
-by sha256: it downloads them without unpacking, checks them, and only then runs `dpkg-source -x`. A
-version without pins, including `""`, does not build: add its three rows to the Dockerfile and
-rebuild the tool, or use a source tarball.
+by sha256: it downloads them without unpacking, checks them, and only then runs `dpkg-source -x`.
+Any other version builds when `--qemu-dsc-sha256` gives the sha256 of its `.dsc`: the `.dsc` must
+have it, and every file the `.dsc` lists must have the sha256 the `.dsc`'s `Checksums-Sha256` field
+gives, before anything is unpacked. That lets the version come with its hash from wherever the
+launch host's QEMU is recorded:
+
+```
+--create-acpi-tables ubuntu:26.04 1:10.2.1+ds-1ubuntu3.1 \
+  --qemu-dsc-sha256 8499c312190488c1126fe61a9e340928eb78da0eff68e7b168ee30627d4a0ad7
+```
+
+A version with neither, including `""`, does not build.
+
+Without `--create-acpi-tables` the tool measures the tables the metadata names: `acpi_tables`, and
+for `edk2-stable202605` `smbios_tables`.
 
 #### Building QEMU from a source tarball
 
@@ -278,6 +345,51 @@ target, extracts every file below except `qcow2`.
 
 `--transcript FILE` writes a human-readable transcript of the binary configuration files. It
 disassembles the ACPI tables with `iasl`, which must be installed.
+
+## Moving from chutesai/tdx-measure
+
+This tool reads the documents chutes-cvm renders for the chutesai/tdx-measure fork unchanged (the
+fork form above) and gives the same MRTD, RTMR0, RTMR1 and RTMR2, run with the same arguments,
+except that it builds only a QEMU version it pins or one named with `--qemu-dsc-sha256`. The fork's
+`ubuntu:26.04` default is `1:10.2.1+ds-1ubuntu3.1`:
+
+```
+tdx-measure metadata.json --platform-only --json-file out.json \
+  --create-acpi-tables ubuntu:26.04 1:10.2.1+ds-1ubuntu3.1 \
+  --qemu-dsc-sha256 8499c312190488c1126fe61a9e340928eb78da0eff68e7b168ee30627d4a0ad7
+tdx-measure --runtime-only runtime.json      # RTMR1 and RTMR2, without --patch-kernel
+```
+
+Its JSON output has `mrtd`, `rtmr0`, `rtmr1` and `rtmr2`; the fork's also had `rtmr0_log`.
+The version 1 form of the same document adds `"metadata_version": 1`,
+`"firmware_profile": "edk2-stable202605"` and `smbios_tables`, and drops a `null` `processor_id`.
+
+`tools/fork-equivalence.py` runs host profiles through both binaries and reports MRTD, RTMR0 (as
+the fork form and as version 1), RTMR1, RTMR2 and the dumped ACPI and SMBIOS tables of each as
+match or MISMATCH. It renders each profile with chutes-cvm, as `measurements generate` does, so
+chutes-cvm must be importable (`--chutes-cvm` names its source directory otherwise):
+
+```
+python3 tools/fork-equivalence.py PROFILES_DIR \
+  --fork /path/to/fork/tdx-measure --ours /path/to/this/tdx-measure \
+  --firmware-dir /path/to/firmware \
+  --image /path/to/release.qcow2 \
+  --report report.json
+```
+
+Each file in `PROFILES_DIR` is a host profile as the API stores it, one record of
+`GET /servers/tdx/host_profiles` (`{"fingerprint", "measured", "profile"}`), a list of records, or a
+ready metadata document. `--firmware-dir` holds `OVMF.inteltdx.fd` and `OVMF.amdsev.fd`, as
+chutes-cvm's `--bios-dir`; `--image` names a release image whose staged `.vmlinuz`, `.initrd` and
+`.cmdline` give RTMR1 and RTMR2 (or `--kernel`, `--initrd` and `--cmdline`). The fork runs as
+chutes-cvm runs it; this tool gets `--qemu-version` and `--qemu-dsc-sha256`, by default the fork's
+pin above. The fork builds its dump image with `docker build --progress plain`, which needs Docker's
+buildx plugin. The runs are sequential; the tool exits 0 only when every value matches.
+
+`tools/fork-equivalence-profiles/` holds 15 host profiles in the API's form, rendered with
+chutes-cvm from its test fixtures and captured BAR layouts: 8x RTX PRO 6000 (guest NUMA, flat,
+interleaved and partly without NUMA affinity), 8x H200 with four NVSwitches on either node, 4x H200,
+8x B300, 8x B200 (176 and 272 vCPUs), 1x H100 PCIe, and AMD hosts of four of them.
 
 ## Building outside Docker
 
