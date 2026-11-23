@@ -1,0 +1,189 @@
+# Copyright (c) 2025-2026 Intel Corporation
+# Modified by Chutes Global Corp, 2026; the changes are listed in CHUTES-UPSTREAM.md.
+# SPDX-License-Identifier: Apache-2.0
+
+ARG DISTRIBUTION=ubuntu:25.04
+FROM ${DISTRIBUTION}
+
+# QEMU_SOURCE selects how the source is fetched:
+#   "ppa"  -> pull-ppa-source from ppa:kobuk-team/tdx-release (Intel TDX QEMU build for 24.04/25.04)
+#   "main" -> pull-lp-source from the distribution's main archive
+#   "url"  -> download a source tarball from QEMU_URL and verify it against QEMU_SHA256
+# "ppa" and "main" build only a QEMU_VERSION whose source package files are pinned below.
+ARG QEMU_SOURCE=ppa
+ARG QEMU_VERSION=
+# Only used when QEMU_SOURCE=url: source-tarball URL and its expected SHA-256 (hex).
+ARG QEMU_URL=
+ARG QEMU_SHA256=
+ARG ACPI_TABLES_NAME
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && \
+    apt-get install --no-install-recommends --yes \
+        build-essential \
+        git \
+        ubuntu-dev-tools \
+        libglib2.0-dev \
+        meson \
+        ninja-build \
+        python3-venv \
+        ca-certificates \
+        curl \
+        xz-utils && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /
+# The three Launchpad source package files of every QEMU package version the "ppa" and "main" modes
+# build, one "<mode> <package version> <sha256> <file>" row each. A version string names a Launchpad
+# publication, not its bytes, and these bytes shape the dumped tables (the predicted RTMR0): the
+# selected version's files must equal their rows before anything is unpacked, and a version without
+# rows does not build (add its three rows, or build a tarball with QEMU_SOURCE=url and QEMU_SHA256).
+RUN printf '%s\n' \
+        'ppa 2:8.2.2+ds-0ubuntu1.4+tdx1.1 d8d33ba3eb6dd8caaacde5554459bfe4dcbb230e037d6c06e1ac4a50e74bbbeb qemu_8.2.2+ds-0ubuntu1.4+tdx1.1.dsc' \
+        'ppa 2:8.2.2+ds-0ubuntu1.4+tdx1.1 5e692dd20950a819ff6550cd3974e00319a93f47c0a15f808c58df1a9e4d2478 qemu_8.2.2+ds.orig.tar.xz' \
+        'ppa 2:8.2.2+ds-0ubuntu1.4+tdx1.1 e2bf4ee6f40d48ac683480f6b25cc9628f1f0cc45159b623653b698b97d309da qemu_8.2.2+ds-0ubuntu1.4+tdx1.1.debian.tar.xz' \
+        'ppa 1:9.2.1+ds-1ubuntu4+tdx2.0~ppa2 d315d5f662bbb2da639f3e0a070f78abebd5a095368b32d9e14b910387cca9f8 qemu_9.2.1+ds-1ubuntu4+tdx2.0~ppa2.dsc' \
+        'ppa 1:9.2.1+ds-1ubuntu4+tdx2.0~ppa2 3d7e2940fee4ebc21ed1a39667050226aa2292f885115ebdd12c8e390071bdc5 qemu_9.2.1+ds.orig.tar.xz' \
+        'ppa 1:9.2.1+ds-1ubuntu4+tdx2.0~ppa2 d0b4de1bc7acfbbfa0138bbb4c3b822550be40d3ad758a40fbab398360fb2747 qemu_9.2.1+ds-1ubuntu4+tdx2.0~ppa2.debian.tar.xz' \
+        'main 1:10.1.0+ds-5ubuntu2.7 cc3fad695801202d226b2f8a9b823993ab5a41ae2e0ddccc34820f626fb4378d qemu_10.1.0+ds-5ubuntu2.7.dsc' \
+        'main 1:10.1.0+ds-5ubuntu2.7 580ebb2760d85859b7b9211aad8cb77b2641efd39016c62dde37a07961b7ed85 qemu_10.1.0+ds.orig.tar.xz' \
+        'main 1:10.1.0+ds-5ubuntu2.7 5824681b9a11ee333092525d08777a020756a4caf6bd5ccf8f970440fa1b4e89 qemu_10.1.0+ds-5ubuntu2.7.debian.tar.xz' \
+        'main 1:10.2.1+ds-1ubuntu3.2 184aa03acb526e0cfad79faa650cb43ef46667dfe9c64bee626301802bc3fde4 qemu_10.2.1+ds-1ubuntu3.2.dsc' \
+        'main 1:10.2.1+ds-1ubuntu3.2 4f495c2a523f78f50cc83327cabf01e7e89c6b9a5d3d6cadd9e78de94b25c416 qemu_10.2.1+ds.orig.tar.xz' \
+        'main 1:10.2.1+ds-1ubuntu3.2 7ecbe2cb99c71161be746ea4b9a53742919a9d09add2e14aa5b0be5b024b690f qemu_10.2.1+ds-1ubuntu3.2.debian.tar.xz' \
+        'main 1:10.2.1+ds-1ubuntu4 b65952d1a9dadf36e735d5b79b3d2701d7c6b9f9ae6f4755165641be008f9b1d qemu_10.2.1+ds-1ubuntu4.dsc' \
+        'main 1:10.2.1+ds-1ubuntu4 4f495c2a523f78f50cc83327cabf01e7e89c6b9a5d3d6cadd9e78de94b25c416 qemu_10.2.1+ds.orig.tar.xz' \
+        'main 1:10.2.1+ds-1ubuntu4 2a072cd734e6bab8ada70108c7d851f22601826dfaa21a50ef2580144ae078a8 qemu_10.2.1+ds-1ubuntu4.debian.tar.xz' \
+        > source-pins
+
+RUN if [ "$QEMU_SOURCE" = "ppa" ] || [ "$QEMU_SOURCE" = "main" ]; then \
+        if ! awk -v mode="$QEMU_SOURCE" -v version="$QEMU_VERSION" \
+                '$1 == mode && $2 == version { print $3 "  " $4; rows++ } END { exit rows != 3 }' \
+                source-pins > SHA256SUMS; then \
+            echo "QEMU_SOURCE=$QEMU_SOURCE has no source pins for QEMU_VERSION=$QEMU_VERSION"; exit 1; \
+        fi && \
+        if [ "$QEMU_SOURCE" = "ppa" ]; then \
+            pull-ppa-source --download-only --ppa ppa:kobuk-team/tdx-release qemu "$QEMU_VERSION"; \
+        else \
+            pull-lp-source --download-only qemu "$QEMU_VERSION"; \
+        fi && \
+        sha256sum --check --strict SHA256SUMS && \
+        dpkg-source -x "$(awk '$2 ~ /\.dsc$/ { print $2 }' SHA256SUMS)"; \
+    elif [ "$QEMU_SOURCE" = "url" ]; then \
+        if [ -z "$QEMU_URL" ] || [ -z "$QEMU_SHA256" ]; then \
+            echo "QEMU_SOURCE=url requires QEMU_URL and QEMU_SHA256"; exit 1; \
+        fi && \
+        curl -fSL -o /qemu-src.tar "$QEMU_URL" && \
+        echo "${QEMU_SHA256}  /qemu-src.tar" | sha256sum -c - && \
+        tar -xf /qemu-src.tar -C / && \
+        rm -f /qemu-src.tar; \
+    else \
+        echo "Unknown QEMU_SOURCE: $QEMU_SOURCE"; exit 1; \
+    fi
+
+RUN QEMU_WRK_DIR=$(find / -maxdepth 1 -type d -name "qemu*" | head -n 1) && \
+    echo "Found QEMU directory: $QEMU_WRK_DIR" && \
+    ln -s "$QEMU_WRK_DIR" /qemu-source && \
+    useradd -m -s /sbin/nologin qemu-user && \
+    chown -R qemu-user:qemu-user "$QEMU_WRK_DIR"
+
+WORKDIR /qemu-source
+
+USER qemu-user
+
+# Patch QEMU source to dump ACPI tables: inject code to write ACPI tables to /output/, force EOI intercept to 1, and skip pc-bios/tests builds
+ARG acpi_tables_dump_loc='\n\n    int fd = open("\/output\/'"${ACPI_TABLES_NAME}"'", O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);\n    if(fd != -1) {\n        int ret = write(fd, (uint8_t *)tables.table_data->data, tables.table_data->len);\n        if (ret < tables.table_data->len) {\n            printf("Error: Failed to write the acpi tables\\n");\n        } else {\n            printf("Successfully wrote the acpi tables to the file \\"'"${ACPI_TABLES_NAME}"'\\"\\n");\n        }\n    } else {\n        printf("Error: Failed to create acpi_tables file.\\n");\n    }\n    exit(0);'
+ARG smbios_tables_dump_loc='\n\n    FILE *smbios_dump = fopen("\/output\/smbios-tables.bin", "wb");\n    if (smbios_dump == NULL || fwrite(smbios_tables, 1, smbios_tables_len, smbios_dump) != smbios_tables_len) {\n        fprintf(stderr, "Error: Failed to write SMBIOS tables\\n");\n        exit(1);\n    }\n    fclose(smbios_dump);'
+ARG acpi_build_c="hw/i386/acpi-build.c"
+ARG acpi_common_c="hw/i386/acpi-common.c"
+ARG fw_cfg_c="hw/i386/fw_cfg.c"
+ARG meson_build="meson.build"
+
+# The subdir('tests') reference moved inside an `if want_tools` block in QEMU 10.x and is now indented;
+# match optional leading whitespace so both layouts get commented out alongside subdir('pc-bios').
+RUN perl -i -0pe 's/(acpi_build_update\(void \*build_opaque\)[\s\S]*?acpi_build\([^;]*;)/\1'"$acpi_tables_dump_loc"'/gs' "$acpi_build_c" && \
+    perl -i -0pe 's/(smbios_get_tables\([\s\S]*?\&error_fatal\);)/\1'"$smbios_tables_dump_loc"'/s' "$fw_cfg_c" && \
+    perl -i -pe 's/x86ms->eoi_intercept_unsupported;/1;/g' "$acpi_build_c" "$acpi_common_c" && \
+    perl -i -pe "s/^(\s*)(subdir\('pc-bios'\)|subdir\('tests'\))/\$1# \$2/g" "$meson_build"
+
+# Model the RTX PRO 6000 SE BAR layout only when the predictor explicitly selects it.
+# Preserve ordinary pci-testdev defaults and all test-state/reset/cleanup initialization.
+# These additional apertures are unbacked: the dumper exits before guest execution.
+RUN perl -i -0pe \
+    's/(    MemoryRegion membar;\n)/$1    bool rtxpro6000se;\n    MemoryRegion rtx_bar0;\n    MemoryRegion rtx_bar4;\n/g == 1 or die "pci-testdev state anchor changed\n"; \
+     s/    pci_register_bar\(pci_dev, 0, PCI_BASE_ADDRESS_SPACE_MEMORY, &d->mmio\);\n    pci_register_bar\(pci_dev, 1, PCI_BASE_ADDRESS_SPACE_IO, &d->portio\);/    if (d->rtxpro6000se) {\n        memory_region_init(\&d->rtx_bar0, OBJECT(d),\n                           "pci-testdev-rtx-bar0", 64ULL * 1024 * 1024);\n        pci_register_bar(pci_dev, 0,\n                         PCI_BASE_ADDRESS_SPACE_MEMORY |\n                         PCI_BASE_ADDRESS_MEM_PREFETCH |\n                         PCI_BASE_ADDRESS_MEM_TYPE_64,\n                         \&d->rtx_bar0);\n        memory_region_init(\&d->rtx_bar4, OBJECT(d),\n                           "pci-testdev-rtx-bar4", 32ULL * 1024 * 1024);\n        pci_register_bar(pci_dev, 4,\n                         PCI_BASE_ADDRESS_SPACE_MEMORY |\n                         PCI_BASE_ADDRESS_MEM_PREFETCH |\n                         PCI_BASE_ADDRESS_MEM_TYPE_64,\n                         \&d->rtx_bar4);\n    } else {\n        pci_register_bar(pci_dev, 0, PCI_BASE_ADDRESS_SPACE_MEMORY, \&d->mmio);\n        pci_register_bar(pci_dev, 1, PCI_BASE_ADDRESS_SPACE_IO, \&d->portio);\n    }/g == 1 or die "pci-testdev BAR anchors changed\n"; \
+     s/(    DEFINE_PROP_BOOL\("membar-backed", PCITestDevState, membar_backed, false\),\n)/$1    DEFINE_PROP_BOOL("x-rtxpro6000se", PCITestDevState, rtxpro6000se, false),\n/g == 1 or die "pci-testdev property anchor changed\n";' \
+    hw/misc/pci-testdev.c
+
+# Two more explicitly selected surrogate modes, applied on top of the RTX patch above, with the
+# BAR layouts of the devices they stand in for:
+#   x-h200           H200 GPU: BAR0 16 MiB and BAR4 32 MiB, 64-bit prefetchable, no I/O BAR
+#                    (BAR2 stays the membar aperture of the measurement shape);
+#   x-nvswitch-ls10  LS10 NVSwitch: one BAR0 of 32 MiB, 64-bit non-prefetchable, nothing else.
+# Realize fails when more than one mode is set or when x-nvswitch-ls10 meets a membar.
+# Every anchor must match exactly once.
+RUN perl -i -0pe \
+    's/(    MemoryRegion rtx_bar4;\n)/$1    bool h200;\n    bool nvswitch_ls10;\n    MemoryRegion h200_bar0;\n    MemoryRegion h200_bar4;\n    MemoryRegion ls10_bar0;\n/g == 1 or die "pci-testdev x-h200 state anchor changed\n"; \
+     s/    if \(d->rtxpro6000se\) \{\n/    if ((d->rtxpro6000se ? 1 : 0) + (d->h200 ? 1 : 0) + (d->nvswitch_ls10 ? 1 : 0) > 1 ||\n        (d->nvswitch_ls10 \&\& d->membar_size)) {\n        fprintf(stderr, "pci-testdev: at most one surrogate mode, and no membar with x-nvswitch-ls10\\n");\n        exit(1);\n    }\n    if (d->h200) {\n        memory_region_init(\&d->h200_bar0, OBJECT(d),\n                           "pci-testdev-h200-bar0", 16ULL * 1024 * 1024);\n        pci_register_bar(pci_dev, 0,\n                         PCI_BASE_ADDRESS_SPACE_MEMORY |\n                         PCI_BASE_ADDRESS_MEM_PREFETCH |\n                         PCI_BASE_ADDRESS_MEM_TYPE_64,\n                         \&d->h200_bar0);\n        memory_region_init(\&d->h200_bar4, OBJECT(d),\n                           "pci-testdev-h200-bar4", 32ULL * 1024 * 1024);\n        pci_register_bar(pci_dev, 4,\n                         PCI_BASE_ADDRESS_SPACE_MEMORY |\n                         PCI_BASE_ADDRESS_MEM_PREFETCH |\n                         PCI_BASE_ADDRESS_MEM_TYPE_64,\n                         \&d->h200_bar4);\n    } else if (d->nvswitch_ls10) {\n        memory_region_init(\&d->ls10_bar0, OBJECT(d),\n                           "pci-testdev-ls10-bar0", 32ULL * 1024 * 1024);\n        pci_register_bar(pci_dev, 0,\n                         PCI_BASE_ADDRESS_SPACE_MEMORY |\n                         PCI_BASE_ADDRESS_MEM_TYPE_64,\n                         \&d->ls10_bar0);\n    } else if (d->rtxpro6000se) {\n/g == 1 or die "pci-testdev x-h200 BAR anchor changed\n"; \
+     s/(    DEFINE_PROP_BOOL\("x-rtxpro6000se", PCITestDevState, rtxpro6000se, false\),\n)/$1    DEFINE_PROP_BOOL("x-h200", PCITestDevState, h200, false),\n    DEFINE_PROP_BOOL("x-nvswitch-ls10", PCITestDevState, nvswitch_ls10, false),\n/g == 1 or die "pci-testdev x-h200 property anchor changed\n";' \
+    hw/misc/pci-testdev.c
+
+# Configure QEMU with minimal features to reduce build time and image size - only KVM acceleration is needed for ACPI table generation
+RUN ./configure \
+    --disable-bsd-user \
+    --disable-guest-agent \
+    --disable-strip \
+    --disable-werror \
+    --disable-gcrypt \
+    --disable-debug-info \
+    --disable-debug-tcg \
+    --disable-docs \
+    --disable-tcg-interpreter \
+    --enable-attr \
+    --disable-brlapi \
+    --disable-linux-aio \
+    --disable-bzip2 \
+    --disable-cap-ng \
+    --disable-curl \
+    --disable-glusterfs \
+    --disable-gnutls \
+    --disable-nettle \
+    --disable-gtk \
+    --disable-rdma \
+    --disable-libiscsi \
+    --disable-vnc-jpeg \
+    --enable-kvm \
+    --disable-lzo \
+    --disable-curses \
+    --disable-libnfs \
+    --disable-numa \
+    --disable-opengl \
+    --disable-rbd \
+    --disable-vnc-sasl \
+    --disable-sdl \
+    --disable-seccomp \
+    --disable-smartcard \
+    --disable-snappy \
+    --disable-spice \
+    --disable-libusb \
+    --disable-usb-redir \
+    --disable-vde \
+    --disable-vhost-net \
+    --disable-virglrenderer \
+    --disable-virtfs \
+    --disable-vnc \
+    --disable-vte \
+    --disable-xen \
+    --disable-xen-pci-passthrough \
+    --disable-tools \
+    --target-list=x86_64-softmmu
+
+RUN make -j$(nproc)
+
+# Add health check for container monitoring
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD ["build/qemu-system-x86_64", "--version"]
+
+ENTRYPOINT ["build/qemu-system-x86_64"]
