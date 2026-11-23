@@ -1,0 +1,10 @@
+# Build arguments of Dockerfile.qemu-acpi-dump-snp, one NAME=VALUE per line.
+# SOURCE_DATE_EPOCH is the snapshot time (20260913T000000Z); BuildKit clamps every newer timestamp to it.
+SOURCE_DATE_EPOCH=1789257600
+QEMU_PACKAGE_VERSION=1:10.2.1+ds-1ubuntu3.2
+QEMU_DSC=qemu_10.2.1+ds-1ubuntu3.2.dsc
+QEMU_DSC_SHA256=184aa03acb526e0cfad79faa650cb43ef46667dfe9c64bee626301802bc3fde4
+QEMU_ORIG=qemu_10.2.1+ds.orig.tar.xz
+QEMU_ORIG_SHA256=4f495c2a523f78f50cc83327cabf01e7e89c6b9a5d3d6cadd9e78de94b25c416
+QEMU_DEBIAN=qemu_10.2.1+ds-1ubuntu3.2.debian.tar.xz
+QEMU_DEBIAN_SHA256=7ecbe2cb99c71161be746ea4b9a53742919a9d09add2e14aa5b0be5b024b690f
