@@ -1,0 +1,29 @@
+# The tests and the vectors (no network: Intel, Google's bucket and registry are injected), and the
+# platform predictor's tests and reproducible build (two builds in the digest-pinned Rust image).
+# actions/checkout is pinned by commit: 11bd7190... is the tag v4.2.2 (git ls-remote
+# https://github.com/actions/checkout refs/tags/v4.2.2).
+name: ci
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        with:
+          persist-credentials: false
+      - run: make vectors
+      - run: |
+          python3 -m venv /tmp/venv
+          /tmp/venv/bin/pip install --require-hashes -r requirements.lock
+          /tmp/venv/bin/pip install --require-hashes -r requirements-test.lock
+          make test PYTHON=/tmp/venv/bin/python
+  platform-predictor:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        with:
+          persist-credentials: false
+      - run: make -C platform-predictor test
+      - run: make -C platform-predictor repro

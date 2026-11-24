@@ -1,0 +1,37 @@
+{
+ "schema": "chutes-tdx-measure.vendor-pins.v1",
+ "files": {
+  "chutes_attest/quote.py": {
+   "sha256": "49e79cc34c79f3d4a4a2a26ca8ab3c87954ea53b3488588152a1883532eb3c6a",
+   "source": "chutesai/chutes-attest v0.8.5 (commit 68b8c85979fdb11b3ae6ed6123fee9a864116ed2): chutes_attest/quote.py, unchanged"
+  },
+  "chutes_attest/tdx_verify.py": {
+   "sha256": "e954ee3f3aba3e9f38b91c44e5d8464840c3277b3afa9679bfd8c20765a807a7",
+   "source": "chutesai/chutes-attest v0.8.5 (commit 68b8c85979fdb11b3ae6ed6123fee9a864116ed2): chutes_attest/tdx_verify.py, reduced: collateral.py fetches the collateral and checks its signers, so this copy has no collateral_fetch_is_no_verdict or check_collateral_signers, and its module-identity fallback reads the PCK extension from the quote"
+  },
+  "chutes_attest/tdx_policy.py": {
+   "sha256": "0d4523a04d458e5b2291e6b66064e6f344e2635798f16f712724094ff4253227",
+   "source": "chutesai/chutes-attest v0.8.5 (commit 68b8c85979fdb11b3ae6ed6123fee9a864116ed2): chutes_attest/tdx_policy.py, unchanged"
+  },
+  "chutes_attest/intel_root.py": {
+   "sha256": "fc7d150b9d80e8e25569a7bd73939a20edaa7a413dea2afd6854a61e4960df8d",
+   "source": "chutesai/chutes-attest v0.8.5 (commit 68b8c85979fdb11b3ae6ed6123fee9a864116ed2): chutes_attest/intel_root.py, unchanged"
+  },
+  "chutes_attest/gcp_tdx_provenance.py": {
+   "sha256": "188fbbfbaa9bb16088cef4e17edfebb0c6f058a145d8ffcfc4f0c17d6f7e59de",
+   "source": "chutesai/chutes-attest v0.8.5 (commit 68b8c85979fdb11b3ae6ed6123fee9a864116ed2): chutes_attest/gcp_tdx_provenance.py, unchanged"
+  },
+  "chutes_attest/rtmr_replay.py": {
+   "sha256": "fa15528078ddb4a33b1875bf6c316db6bc3dd06ca4abc22f62d64afb794857b8",
+   "source": "chutesai/chutes-attest v0.8.5 (commit 68b8c85979fdb11b3ae6ed6123fee9a864116ed2): chutes_attest/rtmr_replay.py, unchanged"
+  },
+  "gcp_prediction.py": {
+   "sha256": "86b8549a9edf8836843df6aad4336e90e8419ced6970458b47d08bc0751c8299",
+   "source": "Chutes' model of a GCP confidential VM's measurements, not published elsewhere"
+  },
+  "owner_vm_firmware.py": {
+   "sha256": "60a9c9168e065507ad441f63f08e15799c14b40853cde6dd980a5e11081bd52d",
+   "source": "the Chutes client vms.chutes.ai provides: chutes/entrypoint/owner_vm_firmware.py, the same code without firmware_dir, _publish and refresh, which need the rest of that client"
+  }
+ }
+}

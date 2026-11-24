@@ -1,0 +1,25 @@
+chutes-tdx-measure
+Copyright Chutes Global Corp (https://chutes.ai)
+
+This repository is licensed under the PolyForm Shield License 1.0.0 (LICENSE,
+https://polyformproject.org/licenses/shield/1.0.0), except the parts below, which keep their own
+licence or belong to their publishers.
+
+platform-predictor/
+    tdx-measure, derived from fortanix/tdx-measure (https://github.com/fortanix/tdx-measure), a fork
+    of virtee/tdx-measure (https://github.com/virtee/tdx-measure), which derives from dstack-mr in
+    Dstack-TEE/dstack (https://github.com/Dstack-TEE/dstack). Chutes' changes and additions in this
+    directory are under the same licence.
+    Apache License 2.0: platform-predictor/LICENSE; attribution: platform-predictor/NOTICE.
+
+platform-predictor/pci-bar-stub.c
+    Written by Chutes. Apache-2.0 (its SPDX line) or, at your option, GPL-2.0-or-later: both dump
+    images build it into QEMU, which is licensed under the GPL, version 2.
+
+chutes_tdx_measure/vendor/chutes_attest/intel_root.py
+    The Intel SGX Provisioning Certification Root CA certificate, published by Intel and included
+    unchanged so the verifier can pin it.
+
+chutes_tdx_measure/vendor/owner_vm_firmware.py
+    The GCE confidential-computing TCB root certificate (GCE-cc-tcb-root_1.crt), published by Google
+    and included unchanged so the verifier can pin it.

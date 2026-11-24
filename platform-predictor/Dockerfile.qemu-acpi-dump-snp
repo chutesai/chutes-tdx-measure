@@ -1,0 +1,170 @@
+# Copyright (c) 2025-2026 Intel Corporation
+# Modified by Chutes Global Corp, 2026; the changes are listed in CHUTES-UPSTREAM.md.
+# SPDX-License-Identifier: Apache-2.0
+#
+# The SEV-SNP platform-table dump image. Derived from Dockerfile.qemu-acpi-dump (the TDX dump
+# image, which this file leaves unchanged): the same QEMU acpi_build_update hook, here writing the
+# three fw_cfg blobs exactly as QEMU serves them -- tables.table_data (etc/acpi/tables),
+# tables.rsdp (etc/acpi/rsdp) and tables.linker->cmd_blob (etc/table-loader) -- at the firmware's
+# first ACPI read, and the same pci-bar-stub device (pci-bar-stub.c) that stands in for a
+# passed-through device.
+#
+# One source mode only, local: the three source package files of the SEV-SNP host's QEMU package
+# (.dsc, .orig.tar.xz, .debian.tar.xz) sit in the build context and are sha256-checked against the
+# build arguments before `dpkg-source -x`; the source is never fetched by a package tool or a URL.
+# The build dependencies come from the snapshot archive at a fixed snapshot on a digest-pinned
+# ubuntu:26.04 base, never from the live archive.
+#
+# The image is built once and named by its digest: tdx-measure --snp-dump runs that one image with
+# --pull=never --network=none (src/acpi.rs, dump_snp_platform_tables) and never builds or pulls it.
+FROM ubuntu:26.04@sha256:da6fc2be547864451aa253836dd926da33623312df4a9a243e35dc877c378a78
+
+# 20260913T000000Z, the first snapshot after the pinned base image was built (2026-09-12T10:24:38Z): the
+# base already carries libc6 2.43-2ubuntu2.4 and a newer perl than the 20260901 snapshot, which apt
+# will not downgrade, so no install resolves there.
+ARG SNAPSHOT=20260913T000000Z
+ARG QEMU_PACKAGE_VERSION
+ARG QEMU_DSC
+ARG QEMU_DSC_SHA256
+ARG QEMU_ORIG
+ARG QEMU_ORIG_SHA256
+ARG QEMU_DEBIAN
+ARG QEMU_DEBIAN_SHA256
+# The image is reproducible: SOURCE_DATE_EPOCH (a build argument, the snapshot time) bounds every
+# timestamp BuildKit writes with rewrite-timestamp, and RUN sees it too, so useradd's password date
+# and Python's byte-code files do not depend on the build time.
+ARG SOURCE_DATE_EPOCH
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# tdx-measure --snp-dump refuses an image whose label differs from its --snp-qemu-version.
+LABEL org.chutes.qemu-package-version="${QEMU_PACKAGE_VERSION}"
+
+# The snapshot archive answers every http request with a 301 to https and this bare base carries
+# no CA bundle, so apt runs with TLS peer verification off for snapshot.ubuntu.com only: an
+# apt.conf.d snippet written before the index update and removed with the package lists.
+# Integrity never rests on TLS: the Signed-By keyring authenticates InRelease, whose hashes chain
+# to every index and package at the pinned snapshot; this image names no package version, so its
+# packages and their whole closure are fixed by the snapshot.
+# libfdt-dev: the Debian-stripped (+ds) orig tarball carries no dtc subproject, and QEMU's
+# x86_64-softmmu configure requires libfdt; the TDX dump image fetches the subproject with git at
+# configure time, which this image does not install, so it takes the archive's libfdt as Ubuntu's
+# own qemu build does.
+RUN set -eu; \
+    for required in QEMU_PACKAGE_VERSION QEMU_DSC QEMU_DSC_SHA256 QEMU_ORIG QEMU_ORIG_SHA256 \
+                    QEMU_DEBIAN QEMU_DEBIAN_SHA256; do \
+        eval "value=\${${required}:-}"; \
+        if [ -z "$value" ]; then echo "build argument ${required} is required" >&2; exit 1; fi; \
+    done; \
+    rm -f /etc/apt/sources.list /etc/apt/sources.list.d/*; \
+    printf 'Types: deb\nURIs: http://snapshot.ubuntu.com/ubuntu/%s\nSuites: resolute resolute-updates resolute-security\nComponents: main universe\nSigned-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg\n' \
+        "${SNAPSHOT}" > /etc/apt/sources.list.d/ubuntu-snapshot.sources; \
+    printf 'Acquire::https::snapshot.ubuntu.com::Verify-Peer "false";\nAcquire::https::snapshot.ubuntu.com::Verify-Host "false";\n' \
+        > /etc/apt/apt.conf.d/99chutes-snapshot-signed-only; \
+    apt-get update; \
+    apt-get install --no-install-recommends --yes \
+        build-essential \
+        dpkg-dev \
+        libfdt-dev \
+        libglib2.0-dev \
+        meson \
+        ninja-build \
+        python3-venv \
+        xz-utils; \
+    apt-get clean; \
+    rm -rf /var/lib/apt/lists/* /etc/apt/apt.conf.d/99chutes-snapshot-signed-only; \
+    rm -f /var/log/dpkg.log /var/log/alternatives.log /var/log/apt/history.log \
+          /var/log/apt/term.log /var/log/apt/eipp.log.xz /var/cache/ldconfig/aux-cache
+
+# The local source: the three files are checked against the build arguments, then unpacked, and
+# pci-bar-stub.c joins the system emulator's sources.
+WORKDIR /qemu-src
+COPY ${QEMU_DSC} ${QEMU_ORIG} ${QEMU_DEBIAN} pci-bar-stub.c /qemu-src/
+RUN set -eu; \
+    printf '%s  %s\n%s  %s\n%s  %s\n' \
+        "${QEMU_DSC_SHA256}" "${QEMU_DSC}" \
+        "${QEMU_ORIG_SHA256}" "${QEMU_ORIG}" \
+        "${QEMU_DEBIAN_SHA256}" "${QEMU_DEBIAN}" > /qemu-src/SHA256SUMS; \
+    sha256sum --check --strict /qemu-src/SHA256SUMS; \
+    grep -qx "Version: ${QEMU_PACKAGE_VERSION}" "/qemu-src/${QEMU_DSC}"; \
+    dpkg-source -x "/qemu-src/${QEMU_DSC}" /qemu-source; \
+    install -m 0644 /qemu-src/pci-bar-stub.c /qemu-source/hw/misc/pci-bar-stub.c; \
+    printf "\nsystem_ss.add(files('pci-bar-stub.c'))\n" >> /qemu-source/hw/misc/meson.build; \
+    useradd -m -s /sbin/nologin qemu-user; \
+    chown -R qemu-user:qemu-user /qemu-source
+
+WORKDIR /qemu-source
+
+USER qemu-user
+
+# meson and QEMU's code generators are Python: a fixed hash seed fixes their set and dict orders.
+ENV PYTHONHASHSEED=0
+
+# Patch QEMU to dump the three fw_cfg ACPI blobs from acpi_build_update and exit before the
+# guest goes further (the anchor must match exactly once), and skip the pc-bios/tests builds.
+ARG snp_tables_dump='\n\n    {\n        static const char *const snp_dump_paths[3] = {\n            "\/output\/acpi-tables.bin", "\/output\/rsdp.bin", "\/output\/table-loader.bin"\n        };\n        GArray *snp_dump_blobs[3] = {\n            tables.table_data, tables.rsdp, tables.linker->cmd_blob\n        };\n        for (int i = 0; i < 3; i++) {\n            int fd = open(snp_dump_paths[i], O_CREAT | O_TRUNC | O_WRONLY,\n                          S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);\n            if (fd == -1 ||\n                write(fd, snp_dump_blobs[i]->data, snp_dump_blobs[i]->len) !=\n                    (ssize_t)snp_dump_blobs[i]->len ||\n                close(fd) != 0) {\n                fprintf(stderr, "Error: failed to write %s\\n", snp_dump_paths[i]);\n                exit(1);\n            }\n        }\n        printf("Successfully wrote the SEV-SNP platform-table blobs\\n");\n        exit(0);\n    }'
+ARG acpi_build_c="hw/i386/acpi-build.c"
+ARG meson_build="meson.build"
+
+RUN perl -i -0pe 's/(acpi_build_update\(void \*build_opaque\)[\s\S]*?acpi_build\([^;]*;)/\1'"$snp_tables_dump"'/s == 1 or die "acpi_build_update anchor changed\n"' "$acpi_build_c" && \
+    perl -i -pe "s/^(\s*)(subdir\('pc-bios'\)|subdir\('tests'\))/\$1# \$2/g" "$meson_build"
+
+# The TDX dump image's configure options, unchanged (TCG stays built in: the SEV-SNP dump runs the
+# measurement shape under TCG), and the build in the same step. The step then removes what records
+# the build itself rather than its result: configure's and meson's logs, meson's pickled state and
+# ninja's logs. Nothing reads them after the build.
+RUN ./configure \
+    --disable-bsd-user \
+    --disable-guest-agent \
+    --disable-strip \
+    --disable-werror \
+    --disable-gcrypt \
+    --disable-debug-info \
+    --disable-debug-tcg \
+    --disable-docs \
+    --disable-tcg-interpreter \
+    --enable-attr \
+    --disable-brlapi \
+    --disable-linux-aio \
+    --disable-bzip2 \
+    --disable-cap-ng \
+    --disable-curl \
+    --disable-glusterfs \
+    --disable-gnutls \
+    --disable-nettle \
+    --disable-gtk \
+    --disable-rdma \
+    --disable-libiscsi \
+    --disable-vnc-jpeg \
+    --enable-kvm \
+    --disable-lzo \
+    --disable-curses \
+    --disable-libnfs \
+    --disable-numa \
+    --disable-opengl \
+    --disable-rbd \
+    --disable-vnc-sasl \
+    --disable-sdl \
+    --disable-seccomp \
+    --disable-smartcard \
+    --disable-snappy \
+    --disable-spice \
+    --disable-libusb \
+    --disable-usb-redir \
+    --disable-vde \
+    --disable-vhost-net \
+    --disable-virglrenderer \
+    --disable-virtfs \
+    --disable-vnc \
+    --disable-vte \
+    --disable-xen \
+    --disable-xen-pci-passthrough \
+    --disable-tools \
+    --target-list=x86_64-softmmu && \
+    make -j$(nproc) && \
+    rm -rf build/config.log build/meson-logs build/meson-private build/.ninja_log build/.ninja_deps
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD ["build/qemu-system-x86_64", "--version"]
+
+ENTRYPOINT ["build/qemu-system-x86_64"]

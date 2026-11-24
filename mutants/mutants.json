@@ -1,0 +1,1368 @@
+{
+ "repository": "chutesai/chutes-tdx-measure",
+ "group": "chutes-tdx-measure's checks: the measurement document (chutes-tdx-gate spec/SPEC.md section 4.2), verify-quote, capture and predict",
+ "mutants": [
+  {
+   "id": "document-size-bound",
+   "check": "4.2 step 1: the 64 KiB size bound removed",
+   "edits": [
+    {
+     "file": "chutes_tdx_measure/document.py",
+     "old": "not 1 <= len(raw) <= MAX_DOCUMENT_BYTES:\n        raise DocumentRefused(\"document_too_large\"",
+     "new": "not 1 <= len(raw) <= 10 ** 9:\n        raise DocumentRefused(\"document_too_large\""
+    }
+   ],
+   "test": [
+    "env",
+    "PYTHONPATH=.",
+    "{python}",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+   ]
+  },
+  {
+   "id": "document-signature",
+   "check": "4.2 step 2: the signature not verified",
+   "edits": [
+    {
+     "file": "chutes_tdx_measure/document.py",
+     "old": "        Ed25519PublicKey.from_public_bytes(public).verify(signature, raw)\n    except (ValueError, InvalidSignature):\n        raise DocumentRefused(\"document_signature_invalid\")",
+     "new": "        Ed25519PublicKey.from_public_bytes(public)\n    except (ValueError, InvalidSignature):\n        raise DocumentRefused(\"document_signature_invalid\")"
+    }
+   ],
+   "test": [
+    "env",
+    "PYTHONPATH=.",
+    "{python}",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+   ]
+  },
+  {
+   "id": "document-duplicate-keys",
+   "check": "4.2 step 3: duplicate keys accepted",
+   "edits": [
+    {
+     "file": "chutes_tdx_measure/document.py",
+     "old": "    if len(keys) != len(set(keys)):\n        raise DocumentRefused(\"document_invalid\", \"duplicate key\")",
+     "new": "    pass"
+    }
+   ],
+   "test": [
+    "env",
+    "PYTHONPATH=.",
+    "{python}",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+   ]
+  },
+  {
+   "id": "document-entry-forms",
+   "check": "4.2 step 4: the closed entry forms not enforced (both rtmr0 and a template)",
+   "edits": [
+    {
+     "file": "chutes_tdx_measure/document.py",
+     "old": "        if keys == EXACT_KEYS:",
+     "new": "        if \"rtmr0\" in keys and \"mrtd\" in keys:"
+    }
+   ],
+   "test": [
+    "env",
+    "PYTHONPATH=.",
+    "{python}",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+   ]
+  },
+  {
+   "id": "document-image-sha256",
+   "check": "4.2 step 5: image_sha256 not compared",
+   "edits": [
+    {
+     "file": "chutes_tdx_measure/document.py",
+     "old": "    if named != image_sha256:",
+     "new": "    if False:"
+    }
+   ],
+   "test": [
+    "env",
+    "PYTHONPATH=.",
+    "{python}",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+   ]
+  },
+  {
+   "id": "match-floor-exact-entry",
+   "check": "4.2 matching: the floor skipped for an exact entry",
+   "edits": [
+    {
+     "file": "chutes_tdx_measure/match.py",
+     "old": "    if not mrtd_admitted:\n        return \"firmware_refused\"\n",
+     "new": ""
+    },
+    {
+     "file": "chutes_tdx_measure/match.py",
+     "old": "            if any(fold(",
+     "new": "            if admitted_cfvs and any(fold("
+    }
+   ],
+   "test": [
+    "env",
+    "PYTHONPATH=.",
+    "{python}",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+   ]
+  },
+  {
+   "id": "match-exact-mrtd",
+   "check": "4.2 matching: the exact form ignores MRTD",
+   "edits": [
+    {
+     "file": "chutes_tdx_measure/match.py",
+     "old": "                if entry[\"mrtd\"] == observed[\"mrtd\"] and entry[\"rtmr0\"] == observed[\"rtmr0\"]:",
+     "new": "                if entry[\"rtmr0\"] == observed[\"rtmr0\"]:"
+    }
+   ],
+   "test": [
+    "env",
+    "PYTHONPATH=.",
+    "{python}",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+   ]
+  },
+  {
+   "id": "match-exact-rtmr0",
+   "check": "4.2 matching: the exact form ignores RTMR0",
+   "edits": [
+    {
+     "file": "chutes_tdx_measure/match.py",
+     "old": "                if entry[\"mrtd\"] == observed[\"mrtd\"] and entry[\"rtmr0\"] == observed[\"rtmr0\"]:",
+     "new": "                if entry[\"mrtd\"] == observed[\"mrtd\"]:"
+    }
+   ],
+   "test": [
+    "env",
+    "PYTHONPATH=.",
+    "{python}",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+   ]
+  },
+  {
+   "id": "match-rtmr1",
+   "check": "4.2 matching: RTMR1 not compared",
+   "edits": [
+    {
+     "file": "chutes_tdx_measure/match.py",
+     "old": "            if entry[\"rtmr1\"] != observed[\"rtmr1\"] or entry[\"rtmr2\"] != observed[\"rtmr2\"]:",
+     "new": "            if entry[\"rtmr2\"] != observed[\"rtmr2\"]:"
+    }
+   ],
+   "test": [
+    "env",
+    "PYTHONPATH=.",
+    "{python}",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+   ]
+  },
+  {
+   "id": "match-rtmr3",
+   "check": "4.2 matching: a pinned RTMR3 not compared",
+   "edits": [
+    {
+     "file": "chutes_tdx_measure/match.py",
+     "old": "            if entry[\"rtmr3\"] is not None and entry[\"rtmr3\"] != observed[\"rtmr3\"]:",
+     "new": "            if False:"
+    }
+   ],
+   "test": [
+    "env",
+    "PYTHONPATH=.",
+    "{python}",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+   ]
+  },
+  {
+   "id": "match-machine-type",
+   "check": "4.2 matching: entries of another machine type counted",
+   "edits": [
+    {
+     "file": "chutes_tdx_measure/match.py",
+     "old": "            if entry[\"machine_type\"] != machine_type:\n                continue\n",
+     "new": ""
+    }
+   ],
+   "test": [
+    "env",
+    "PYTHONPATH=.",
+    "{python}",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+   ]
+  },
+  {
+   "id": "rtmr0-fold-order",
+   "check": "the RTMR0 fold with its operands swapped",
+   "edits": [
+    {
+     "file": "chutes_tdx_measure/match.py",
+     "old": "bytes.fromhex(template[\"before_cfv\"]) + bytes.fromhex(cfv_sha384)",
+     "new": "bytes.fromhex(cfv_sha384) + bytes.fromhex(template[\"before_cfv\"])"
+    }
+   ],
+   "test": [
+    "env",
+    "PYTHONPATH=.",
+    "{python}",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+   ]
+  },
+  {
+   "id": "key-proof-user-id",
+   "check": "the key proof without the user id",
+   "edits": [
+    {
+     "file": "chutes_tdx_measure/document.py",
+     "old": "    return PROOF_PREFIX + user_id.encode(\"ascii\") + b\"\\x00\" + archive_sha256.encode(\"ascii\")",
+     "new": "    return PROOF_PREFIX + b\"\\x00\" + archive_sha256.encode(\"ascii\")"
+    }
+   ],
+   "test": [
+    "env",
+    "PYTHONPATH=.",
+    "{python}",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+   ]
+  },
+  {
+   "id": "floor-cl-spec",
+   "check": "the floor: the changelist code floor off",
+   "edits": [
+    {
+     "file": "chutes_tdx_measure/firmware.py",
+     "old": "            and cl_spec >= max(CL_SPEC_CODE_FLOOR, self.min_cl_spec)",
+     "new": "            and cl_spec >= self.min_cl_spec"
+    }
+   ],
+   "test": [
+    "env",
+    "PYTHONPATH=.",
+    "{python}",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+   ]
+  },
+  {
+   "id": "floor-svn",
+   "check": "the floor: the SVN floor off",
+   "edits": [
+    {
+     "file": "chutes_tdx_measure/firmware.py",
+     "old": "            and build.svn >= max(SVN_CODE_FLOOR, self.min_svn)",
+     "new": ""
+    }
+   ],
+   "test": [
+    "env",
+    "PYTHONPATH=.",
+    "{python}",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+   ]
+  },
+  {
+   "id": "floor-endorsed-at",
+   "check": "the floor: the golden timestamp floor off",
+   "edits": [
+    {
+     "file": "chutes_tdx_measure/firmware.py",
+     "old": "            and build.endorsed_at >= ENDORSED_AT_CODE_FLOOR",
+     "new": ""
+    }
+   ],
+   "test": [
+    "env",
+    "PYTHONPATH=.",
+    "{python}",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+   ]
+  },
+  {
+   "id": "floor-denied-builds",
+   "check": "the floor: denied builds admitted",
+   "edits": [
+    {
+     "file": "chutes_tdx_measure/firmware.py",
+     "old": "            build.uefi_sha384 not in self.denied_builds\n            and ",
+     "new": "            "
+    }
+   ],
+   "test": [
+    "env",
+    "PYTHONPATH=.",
+    "{python}",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+   ]
+  },
+  {
+   "id": "admission-ram-specific",
+   "check": "the admission: a RAM-specific entry admitted",
+   "edits": [
+    {
+     "file": "chutes_tdx_measure/firmware.py",
+     "old": "index.tdx_admissions(mrtd, 0) if (0, mrtd) in a.build.mrtds]",
+     "new": "index.tdx_admissions(mrtd, 16)]"
+    }
+   ],
+   "test": [
+    "env",
+    "PYTHONPATH=.",
+    "{python}",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+   ]
+  },
+  {
+   "id": "verify-debug-bit",
+   "check": "verify: the debug bit not checked",
+   "edits": [
+    {
+     "file": "chutes_tdx_measure/verify.py",
+     "old": "    elif _debug(raw):",
+     "new": "    elif False:"
+    }
+   ],
+   "test": [
+    "env",
+    "PYTHONPATH=.",
+    "{python}",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+   ]
+  },
+  {
+   "id": "verify-binding",
+   "check": "verify: the binding not compared",
+   "edits": [
+    {
+     "file": "chutes_tdx_measure/verify.py",
+     "old": "    if parsed is not None and bytes.fromhex(parsed.report_data) == inputs.expected_report_data:",
+     "new": "    if parsed is not None:"
+    }
+   ],
+   "test": [
+    "env",
+    "PYTHONPATH=.",
+    "{python}",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+   ]
+  },
+  {
+   "id": "verify-project-pin",
+   "check": "verify: the project pin off",
+   "edits": [
+    {
+     "file": "chutes_tdx_measure/verify.py",
+     "old": "    elif not _GCE_ID.fullmatch(inputs.project_number) or inputs.project_number not in allowed:",
+     "new": "    elif not _GCE_ID.fullmatch(inputs.project_number):"
+    }
+   ],
+   "test": [
+    "env",
+    "PYTHONPATH=.",
+    "{python}",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+   ]
+  },
+  {
+   "id": "verify-mrconfigid",
+   "check": "verify: MRCONFIGID not checked",
+   "edits": [
+    {
+     "file": "chutes_tdx_measure/verify.py",
+     "old": "    elif parsed.mr_config_id != \"0\" * 96 or parsed.mr_owner_config != \"0\" * 96:",
+     "new": "    elif parsed.mr_owner_config != \"0\" * 96:"
+    }
+   ],
+   "test": [
+    "env",
+    "PYTHONPATH=.",
+    "{python}",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+   ]
+  },
+  {
+   "id": "verify-mrownerconfig",
+   "check": "verify: MROWNERCONFIG not checked",
+   "edits": [
+    {
+     "file": "chutes_tdx_measure/verify.py",
+     "old": "    elif parsed.mr_config_id != \"0\" * 96 or parsed.mr_owner_config != \"0\" * 96:",
+     "new": "    elif parsed.mr_config_id != \"0\" * 96:"
+    }
+   ],
+   "test": [
+    "env",
+    "PYTHONPATH=.",
+    "{python}",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+   ]
+  },
+  {
+   "id": "verify-provider-root-last",
+   "check": "verify: provider_root asked although a row failed (not last)",
+   "edits": [
+    {
+     "file": "chutes_tdx_measure/verify.py",
+     "old": "    if failed:\n        rows.append(_row(\"provider_root\", \"not_run\"",
+     "new": "    if False:\n        rows.append(_row(\"provider_root\", \"not_run\""
+    }
+   ],
+   "test": [
+    "env",
+    "PYTHONPATH=.",
+    "{python}",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+   ]
+  },
+  {
+   "id": "capture-ccel-replay",
+   "check": "capture: the CCEL replay not compared with the quote",
+   "edits": [
+    {
+     "file": "chutes_tdx_measure/capture.py",
+     "old": "        if replayed[f\"RTMR{index}\"].lower() != parsed.rtmrs[f\"rtmr{index}\"].lower():",
+     "new": "        if False:"
+    }
+   ],
+   "test": [
+    "env",
+    "PYTHONPATH=.",
+    "{python}",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+   ]
+  },
+  {
+   "id": "capture-nonce",
+   "check": "capture: the capture nonce not checked",
+   "edits": [
+    {
+     "file": "chutes_tdx_measure/capture.py",
+     "old": "    if nonce is not None and bytes.fromhex(parsed.report_data) != capture_report_data(nonce):",
+     "new": "    if False:"
+    }
+   ],
+   "test": [
+    "env",
+    "PYTHONPATH=.",
+    "{python}",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+   ]
+  },
+  {
+   "id": "predict-kernel-loadimage-event",
+   "check": "predict: the kernel's LoadImage event dropped from RTMR1",
+   "edits": [
+    {
+     "file": "chutes_tdx_measure/predict.py",
+     "old": "    if kernel_authenticode is not None:\n        events.append(",
+     "new": "    if False:\n        events.append("
+    }
+   ],
+   "test": [
+    "env",
+    "PYTHONPATH=.",
+    "{python}",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+   ]
+  },
+  {
+   "id": "predict-stub-257-rtmr2",
+   "check": "predict: the 257 stub modelled as measuring nothing into RTMR2",
+   "edits": [
+    {
+     "file": "chutes_tdx_measure/predict.py",
+     "old": "    if major >= STUB_CC_MEASURED:",
+     "new": "    if False:"
+    }
+   ],
+   "test": [
+    "env",
+    "PYTHONPATH=.",
+    "{python}",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+   ]
+  },
+  {
+   "id": "predict-section-padding",
+   "check": "predict: a section measured without its zero padding to VirtualSize",
+   "edits": [
+    {
+     "file": "chutes_tdx_measure/predict.py",
+     "old": "    return data + bytes(vsize - len(data))",
+     "new": "    return data"
+    }
+   ],
+   "test": [
+    "env",
+    "PYTHONPATH=.",
+    "{python}",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+   ]
+  },
+  {
+   "id": "predict-unmodelled-stub",
+   "check": "predict: an unmodelled stub (256) given the 255 model",
+   "edits": [
+    {
+     "file": "chutes_tdx_measure/predict.py",
+     "old": "    elif major == 255:",
+     "new": "    elif major <= 256:"
+    }
+   ],
+   "test": [
+    "env",
+    "PYTHONPATH=.",
+    "{python}",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+   ]
+  },
+  {
+   "id": "predict-pcrsig",
+   "check": "predict: .pcrsig measured",
+   "edits": [
+    {
+     "file": "chutes_tdx_measure/predict.py",
+     "old": "\".sbat\",\n                 \".pcrpkey\"",
+     "new": "\".sbat\", \".pcrsig\",\n                 \".pcrpkey\""
+    }
+   ],
+   "test": [
+    "env",
+    "PYTHONPATH=.",
+    "{python}",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+   ]
+  },
+  {
+   "id": "verify-td-attributes-missing",
+   "check": "verify: a verdict without TD attributes accepted",
+   "edits": [
+    {
+     "file": "chutes_tdx_measure/verify.py",
+     "old": "            elif tdx_policy.debug_enabled(td_attributes) or not tdx_policy.td_attributes_valid(td_attributes):",
+     "new": "            elif td_attributes is not None and (tdx_policy.debug_enabled(td_attributes) or not tdx_policy.td_attributes_valid(td_attributes)):"
+    }
+   ],
+   "test": [
+    "env",
+    "PYTHONPATH=.",
+    "{python}",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+   ]
+  },
+  {
+   "id": "verify-index-unproven-quote",
+   "check": "verify: Google's firmware index asked for an unproven quote's MRTD",
+   "edits": [
+    {
+     "file": "chutes_tdx_measure/verify.py",
+     "old": "    elif any(r[\"status\"] != \"pass\" for r in rows if r[\"row\"] in (\"quote\", \"binding\")):",
+     "new": "    elif False:"
+    }
+   ],
+   "test": [
+    "env",
+    "PYTHONPATH=.",
+    "{python}",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+   ]
+  },
+  {
+   "id": "verify-own-project-pin",
+   "check": "verify: the VM's own project taken as its pin",
+   "edits": [
+    {
+     "file": "chutes_tdx_measure/verify.py",
+     "old": "    allowed = set(inputs.allowed_projects)\n",
+     "new": "    allowed = set(inputs.allowed_projects) or {inputs.project_number}\n"
+    }
+   ],
+   "test": [
+    "env",
+    "PYTHONPATH=.",
+    "{python}",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+   ]
+  },
+  {
+   "id": "cli-project-pin-required",
+   "check": "verify-quote: run without a project pin",
+   "edits": [
+    {
+     "file": "chutes_tdx_measure/cli.py",
+     "old": "    if not args.platform and not args.allowed_project:",
+     "new": "    if False:"
+    }
+   ],
+   "test": [
+    "env",
+    "PYTHONPATH=.",
+    "{python}",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+   ]
+  },
+  {
+   "id": "cli-allowed-project-with-platform",
+   "check": "verify-quote: --allowed-project ignored when --platform is given",
+   "edits": [
+    {
+     "file": "chutes_tdx_measure/cli.py",
+     "old": "tuple(p for p in pinned if p in allowed_projects) if args.allowed_project else pinned",
+     "new": "pinned"
+    }
+   ],
+   "test": [
+    "env",
+    "PYTHONPATH=.",
+    "{python}",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+   ]
+  },
+  {
+   "id": "cli-floor-combined",
+   "check": "verify-quote: --floor replaces the platform's floor",
+   "edits": [
+    {
+     "file": "chutes_tdx_measure/cli.py",
+     "old": "floor=firmware.Floor.combine([firmware.Floor.from_document(f) for f in floors]))",
+     "new": "floor=firmware.Floor.from_document(floors[0] if floors else None))"
+    }
+   ],
+   "test": [
+    "env",
+    "PYTHONPATH=.",
+    "{python}",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+   ]
+  },
+  {
+   "id": "floor-combine-maximum",
+   "check": "Floor.combine takes the lower minimum",
+   "edits": [
+    {
+     "file": "chutes_tdx_measure/firmware.py",
+     "old": "        return cls(max(f.min_cl_spec for f in floors),",
+     "new": "        return cls(min(f.min_cl_spec for f in floors),"
+    }
+   ],
+   "test": [
+    "env",
+    "PYTHONPATH=.",
+    "{python}",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+   ]
+  },
+  {
+   "id": "cli-signature-newline",
+   "check": "verify-document: a signature file's trailing newline refused",
+   "edits": [
+    {
+     "file": "chutes_tdx_measure/cli.py",
+     "old": "_read(args.signature).decode(\"ascii\").strip(), public,",
+     "new": "_read(args.signature).decode(\"ascii\"), public,"
+    }
+   ],
+   "test": [
+    "env",
+    "PYTHONPATH=.",
+    "{python}",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+   ]
+  },
+  {
+   "id": "cli-key-proof-without-key",
+   "check": "key proof without --key: a traceback",
+   "edits": [
+    {
+     "file": "chutes_tdx_measure/cli.py",
+     "old": "    if not args.key:\n        raise SystemExit(\"give --key (the measurement key), or --print-message to sign elsewhere\")\n",
+     "new": ""
+    }
+   ],
+   "test": [
+    "env",
+    "PYTHONPATH=.",
+    "{python}",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+   ]
+  },
+  {
+   "id": "predict-zero-rtmr2-not-signable",
+   "check": "predict: the all-zero RTMR2 alternative offered as signable",
+   "edits": [
+    {
+     "file": "chutes_tdx_measure/predict.py",
+     "old": "rtmr2_alternatives = [{\"model\": NOT_SIGNABLE_ZERO, \"signable\": False, \"value\": ZERO}]",
+     "new": "rtmr2_alternatives = [{\"model\": NOT_SIGNABLE_ZERO, \"value\": ZERO}]"
+    }
+   ],
+   "test": [
+    "env",
+    "PYTHONPATH=.",
+    "{python}",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+   ]
+  },
+  {
+   "id": "capture-dcap-by-default",
+   "check": "capture: the quote not verified with Intel DCAP unless asked",
+   "edits": [
+    {
+     "file": "chutes_tdx_measure/cli.py",
+     "old": "    if not args.unverified:\n",
+     "new": "    if False:\n"
+    }
+   ],
+   "test": [
+    "env",
+    "PYTHONPATH=.",
+    "{python}",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+   ]
+  },
+  {
+   "id": "capture-verified-needs-nonce",
+   "check": "capture: a verified capture without the capture nonce",
+   "edits": [
+    {
+     "file": "chutes_tdx_measure/capture.py",
+     "old": "    if verify_quote is not None and nonce is None:\n        raise CaptureRefused(\"a verified capture needs the capture nonce: without it the quote may be any earlier one\")\n",
+     "new": ""
+    }
+   ],
+   "test": [
+    "env",
+    "PYTHONPATH=.",
+    "{python}",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+   ]
+  },
+  {
+   "id": "capture-policy-verdict",
+   "check": "capture: a verdict the TDX policy refuses accepted",
+   "edits": [
+    {
+     "file": "chutes_tdx_measure/capture.py",
+     "old": "    if not verdict.passed:\n        raise CaptureRefused(\"Intel DCAP refuses the quote: \" + \"; \".join(c.name for c in tdx_policy.failed(verdict.checks)))\n",
+     "new": ""
+    }
+   ],
+   "test": [
+    "env",
+    "PYTHONPATH=.",
+    "{python}",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+   ]
+  },
+  {
+   "id": "capture-debug-td",
+   "check": "capture: a debug TD's verdict, or one without attributes, accepted",
+   "edits": [
+    {
+     "file": "chutes_tdx_measure/capture.py",
+     "old": "    if tdx_policy.debug_enabled(td_attributes) or not tdx_policy.td_attributes_valid(td_attributes):\n        raise CaptureRefused(\"Intel DCAP refuses the quote: TD attributes missing or refused (a debug TD's registers prove nothing)\")\n",
+     "new": ""
+    }
+   ],
+   "test": [
+    "env",
+    "PYTHONPATH=.",
+    "{python}",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+   ]
+  },
+  {
+   "id": "capture-intel-collateral-only",
+   "check": "capture: Intel's collateral from whatever source the environment names",
+   "edits": [
+    {
+     "file": "chutes_tdx_measure/cli.py",
+     "old": "verify.default_verifiers(collateral_source=\"intel-pcs\").quote",
+     "new": "verify.default_verifiers().quote"
+    }
+   ],
+   "test": [
+    "env",
+    "PYTHONPATH=.",
+    "{python}",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+   ]
+  },
+  {
+   "id": "capture-unverified-notice",
+   "check": "capture: an unverified capture printed with the verified capture's notice",
+   "edits": [
+    {
+     "file": "chutes_tdx_measure/cli.py",
+     "old": "if verification else capture.NOTICE_UNVERIFIED",
+     "new": "if verification else capture.NOTICE.format(status=\"UpToDate\")"
+    }
+   ],
+   "test": [
+    "env",
+    "PYTHONPATH=.",
+    "{python}",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+   ]
+  },
+  {
+   "id": "verifier-judges-signers",
+   "check": "verify-quote and capture: the vendored one-step verifier, which does not judge the collateral's signers",
+   "edits": [
+    {
+     "file": "chutes_tdx_measure/verify.py",
+     "old": "collateral.verify_quote(raw, collateral_source=collateral_source)",
+     "new": "tdx_verify.verify_tdx_quote_bytes(raw, collateral_source=collateral_source)"
+    }
+   ],
+   "test": [
+    "env",
+    "PYTHONPATH=.",
+    "{python}",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+   ]
+  },
+  {
+   "id": "collateral-signer-refusal",
+   "check": "collateral: the signer rule's refusal dropped, collateral under any signer reaches Intel's verifier",
+   "edits": [
+    {
+     "file": "chutes_tdx_measure/collateral.py",
+     "old": "    refused = collateral_signers(document)\n",
+     "new": "    refused = None\n"
+    }
+   ],
+   "test": [
+    "env",
+    "PYTHONPATH=.",
+    "{python}",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+   ]
+  },
+  {
+   "id": "collateral-qe-identity-signer",
+   "check": "collateral: the QE Identity's signer not judged",
+   "edits": [
+    {
+     "file": "chutes_tdx_measure/collateral.py",
+     "old": "_SIGNED_COLLATERAL = ((\"tcb_info_issuer_chain\", \"TCB Info\"), (\"qe_identity_issuer_chain\", \"QE Identity\"))",
+     "new": "_SIGNED_COLLATERAL = ((\"tcb_info_issuer_chain\", \"TCB Info\"),)"
+    }
+   ],
+   "test": [
+    "env",
+    "PYTHONPATH=.",
+    "{python}",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+   ]
+  },
+  {
+   "id": "collateral-tcb-info-signer",
+   "check": "collateral: the TCB Info's signer not judged",
+   "edits": [
+    {
+     "file": "chutes_tdx_measure/collateral.py",
+     "old": "_SIGNED_COLLATERAL = ((\"tcb_info_issuer_chain\", \"TCB Info\"), (\"qe_identity_issuer_chain\", \"QE Identity\"))",
+     "new": "_SIGNED_COLLATERAL = ((\"qe_identity_issuer_chain\", \"QE Identity\"),)"
+    }
+   ],
+   "test": [
+    "env",
+    "PYTHONPATH=.",
+    "{python}",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+   ]
+  },
+  {
+   "id": "collateral-two-certificates",
+   "check": "collateral: an issuer chain with a third certificate, or text after the two, accepted",
+   "edits": [
+    {
+     "file": "chutes_tdx_measure/collateral.py",
+     "old": "_SIGNER_CHAIN.fullmatch(chain)",
+     "new": "_SIGNER_CHAIN.match(chain)"
+    }
+   ],
+   "test": [
+    "env",
+    "PYTHONPATH=.",
+    "{python}",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+   ]
+  },
+  {
+   "id": "collateral-signer-common-name",
+   "check": "collateral: the signer's common name not required to be Intel SGX TCB Signing",
+   "edits": [
+    {
+     "file": "chutes_tdx_measure/collateral.py",
+     "old": "        if names != [TCB_SIGNING_CN]:\n",
+     "new": "        if False:\n"
+    }
+   ],
+   "test": [
+    "env",
+    "PYTHONPATH=.",
+    "{python}",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+   ]
+  },
+  {
+   "id": "collateral-signer-signature",
+   "check": "collateral: the signer's signature not verified under the pinned Intel SGX root",
+   "edits": [
+    {
+     "file": "chutes_tdx_measure/collateral.py",
+     "old": "            signer.verify_directly_issued_by(root)\n",
+     "new": "            pass\n"
+    }
+   ],
+   "test": [
+    "env",
+    "PYTHONPATH=.",
+    "{python}",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+   ]
+  },
+  {
+   "id": "collateral-pinned-root",
+   "check": "collateral: the chain's second certificate not required to be the pinned root, byte for byte",
+   "edits": [
+    {
+     "file": "chutes_tdx_measure/collateral.py",
+     "old": "        if issuer_der != root_der:\n",
+     "new": "        if False:\n"
+    }
+   ],
+   "test": [
+    "env",
+    "PYTHONPATH=.",
+    "{python}",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+   ]
+  },
+  {
+   "id": "collateral-canonical-base64",
+   "check": "collateral: a certificate's base64 not required to be canonical",
+   "edits": [
+    {
+     "file": "chutes_tdx_measure/collateral.py",
+     "old": "    if base64.b64encode(der).decode(\"ascii\") != text:\n        raise ValueError(\"not canonical base64\")\n",
+     "new": ""
+    }
+   ],
+   "test": [
+    "env",
+    "PYTHONPATH=.",
+    "{python}",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+   ]
+  },
+  {
+   "id": "collateral-judged-text",
+   "check": "collateral: the verifier fetches its own collateral after the signer rule, not the judged text",
+   "edits": [
+    {
+     "file": "chutes_tdx_measure/collateral.py",
+     "old": "return await asyncio.to_thread(tdx_verify.verify_tdx_quote_with_collateral, raw, text, now=now_secs)",
+     "new": "return await tdx_verify.verify_tdx_quote_bytes(raw, collateral_source=source, now=now_secs)"
+    }
+   ],
+   "test": [
+    "env",
+    "PYTHONPATH=.",
+    "{python}",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+   ]
+  },
+  {
+   "id": "collateral-stale-no-verdict",
+   "check": "collateral: stale collateral handed to the verifier instead of no verdict",
+   "edits": [
+    {
+     "file": "chutes_tdx_measure/collateral.py",
+     "old": "    if not tdx_policy.all_passed(freshness):\n        raise tdx_verify.VerifierUnavailable(\n            f\"stale TDX collateral from {source}: \"\n            + \"; \".join(f\"{check.name}: {check.detail}\" for check in tdx_policy.failed(freshness)))\n",
+     "new": ""
+    }
+   ],
+   "test": [
+    "env",
+    "PYTHONPATH=.",
+    "{python}",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+   ]
+  },
+  {
+   "id": "predict-stub-258-no-kernel-event",
+   "check": "predict: systemd-stub 258 and later modelled with the kernel's LoadImage event in RTMR1",
+   "edits": [
+    {
+     "file": "chutes_tdx_measure/predict.py",
+     "old": "    if major >= STUB_MAPS_KERNEL:\n",
+     "new": "    if False:\n"
+    }
+   ],
+   "test": [
+    "env",
+    "PYTHONPATH=.",
+    "{python}",
+    "-m",
+    "pytest",
+    "-q",
+    "-x",
+    "-p",
+    "no:cacheprovider",
+    "tests"
+   ]
+  }
+ ]
+}
