@@ -21,7 +21,7 @@ class FirmwareUnavailable(RuntimeError):
 
 @dataclass(frozen=True)
 class Floor:
-    """The firmware floor: the trust file's or the platform's ``firmware_floor``."""
+    """The firmware floor: a ``--floor`` document or the platform's ``firmware_floor``."""
 
     min_cl_spec: int = CL_SPEC_CODE_FLOOR
     min_svn: int = SVN_CODE_FLOOR
@@ -44,8 +44,8 @@ class Floor:
 
     @classmethod
     def combine(cls, floors) -> "Floor":
-        """Every floor at once (a trust file's and a platform's, say): each minimum's maximum and
-        every denied build; the code floor when there is none."""
+        """Every floor at once (``--floor`` and the platform's): each minimum's maximum and every
+        denied build; the code floor when there is none."""
         floors = list(floors)
         if not floors:
             return cls()

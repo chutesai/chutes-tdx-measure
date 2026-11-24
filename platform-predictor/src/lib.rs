@@ -61,13 +61,12 @@ pub enum MetadataForm {
     /// `metadata_version: 1`: every field is known, direct boot names its `firmware_profile`,
     /// `qemu.serial` is a list and every `pci-bar-stub` device is checked before QEMU runs.
     V1,
-    /// No `metadata_version`, the form this tool read before metadata versions. It keeps its
-    /// meaning: a direct boot without `firmware_profile` `edk2-stable202605` measures the
-    /// BootOrder/Boot0000 sequence.
+    /// No `metadata_version`: a direct boot without `firmware_profile` `edk2-stable202605` measures
+    /// the BootOrder/Boot0000 sequence.
     #[default]
     Legacy,
     /// No `metadata_version`, written for the chutesai/tdx-measure fork: `qemu` carries
-    /// `processor_id` or a `serial` list, which only that fork read. As in that fork, a direct boot
+    /// `processor_id` or a `serial` list, which only that fork reads. As in that fork, a direct boot
     /// measures the edk2-stable202605 sequence whether or not `firmware_profile` says so, with the
     /// fork's two rules: `etc/extra-pci-roots` counts the devices whose text contains `pxb-pcie`,
     /// and the SMBIOS tables go to `smbios-tables` beside `acpi_tables` unless `smbios_tables`
@@ -271,7 +270,7 @@ impl ImageConfig {
         Ok(config)
     }
 
-    /// Whether the document uses a field only the chutesai/tdx-measure fork read.
+    /// Whether the document uses a field only the chutesai/tdx-measure fork reads.
     fn has_fork_fields(&self) -> bool {
         self.boot_config
             .as_ref()

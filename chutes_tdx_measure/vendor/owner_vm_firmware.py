@@ -1,20 +1,17 @@
-"""GCP SEV-SNP firmware for owner VMs: Google's launch endorsements and the owner's firmware index.
+"""Google's GCE launch endorsements and a firmware index built from them (the Chutes SDK's module).
 
-On GCP SEV-SNP the stage-0 identity is the vTPM (PCR4/7/8/9); the hardware MEASUREMENT covers only
-Google's OVMF and the VMSAs. The client therefore accepts any MEASUREMENT that Google endorses for
-the shape's vCPU count, from the owner's own firmware index: a directory of Google's
-``VMLaunchEndorsement`` documents (``<state dir>/firmware/<uefi_sha384>.binarypb``), every one
-re-verified under Google's pinned GCE confidential-computing root each time the index loads; the
-index document is ``chutes.gce-firmware-index.v1`` (SEV-SNP members only). The signed catalog
-block ``owner_vm.gcp`` carries the floor (``min_endorsed_at`` and an optional ``min_svn``): older
-endorsed firmware is refused (``firmware_below_floor``).
-
-``chutes vm firmware-index refresh`` fetches endorsements from Google's fixed bucket and verifies
-them; ``unlock`` (and ``--watch``) refreshes automatically when it meets an unknown MEASUREMENT.
+On GCP SEV-SNP the hardware MEASUREMENT covers only Google's OVMF and the VMSAs, so a verifier
+accepts any MEASUREMENT Google endorses for the shape's vCPU count. On GCP TDX the endorsements list
+the MRTDs of each firmware build, and Google's published binary of the build gives its CFV. The
+firmware index is a directory of Google's ``VMLaunchEndorsement`` documents
+(``<uefi_sha384>.binarypb``) and TDX binaries (``<uefi_sha384>.fd``), every one re-verified under
+Google's pinned GCE confidential-computing root each time the index loads; the index document is
+``chutes.gce-firmware-index.v1``. A floor (``min_endorsed_at`` and an optional ``min_svn``) refuses
+older endorsed firmware (``firmware_below_floor``).
 
 Everything from ``GceEndorsementError`` to ``gce_firmware_binary_object_name`` below is the
-endorsement verifier Chutes' validator runs, copied into the SDK. The owner-index code after it is
-the SDK's own.
+endorsement verifier Chutes' validator runs. ``firmware_dir`` and ``_publish`` use the SDK's state
+directory and need the Chutes SDK; this package passes its own directory and does not call them.
 """
 
 from __future__ import annotations
@@ -96,7 +93,8 @@ _MAX_TIMESTAMP_SECONDS = 253402300799  # 9999-12-31T23:59:59Z, google.protobuf.T
 _VARINT = 0
 _LEN = 2
 
-# message -> {field number: (name, wire type, repeated)}; proto/endorsement.proto at gtv 022f7554.
+# message -> {field number: (name, wire type, repeated)}; proto/endorsement.proto of
+# google/gce-tcb-verifier at 022f7554.
 _ENDORSEMENT_FIELDS = {1: ("serialized_uefi_golden", _LEN, False), 2: ("signature", _LEN, False)}
 _GOLDEN_FIELDS = {
     1: ("timestamp", _LEN, False),
@@ -678,10 +676,9 @@ def gce_firmware_binary_object_name(uefi_sha384: str) -> str:
 
 
 # === The TDVF CFV derivation and the RTMR0 template ==============================================
-# Chutes' validator's GCP TDX functions, copied into the SDK: the TDVF constants, ``_le`` and
-# ``derive_cfv_sha384`` (the logic of sek8s tdx-measure ``measure_cfv``), and
-# ``evaluate_rtmr0_template``. ``GceFirmwareBundleError`` is the validator's name for a binary whose
-# TDVF layout is refused.
+# Chutes' validator's GCP TDX functions: the TDVF constants, ``_le``, ``derive_cfv_sha384`` (the
+# logic of ``measure_cfv`` in platform-predictor/src/tdvf.rs) and ``evaluate_rtmr0_template``.
+# ``GceFirmwareBundleError`` is the validator's name for a binary whose TDVF layout is refused.
 
 import struct  # noqa: E402
 from typing import Mapping  # noqa: E402
@@ -767,7 +764,7 @@ def evaluate_rtmr0_template(template: Mapping, cfv_sha384: str) -> str:
         register = hashlib.sha384(register + bytes.fromhex(digest)).digest()
     return register.hex().upper()
 
-# === The owner's firmware index (SDK code; not vendored) =========================================
+# === The firmware index =========================================================================
 
 import contextlib  # noqa: E402
 import os  # noqa: E402
@@ -784,7 +781,7 @@ _HEX96_LOWER = re.compile(r"[0-9a-f]{96}")
 
 
 class FirmwareRefusal(ValueError):
-    """A refusal of the GCP firmware value or of the owner's firmware index, with its code:
+    """A refusal of the GCP firmware value or of the firmware index, with its code:
     ``firmware_unendorsed``, ``firmware_vcpu_mismatch``, ``firmware_below_floor``,
     ``firmware_index_invalid`` or ``firmware_refresh_failed``."""
 
@@ -795,7 +792,7 @@ class FirmwareRefusal(ValueError):
 
 @dataclass(frozen=True)
 class SnpBuild:
-    """One verified build of the owner's index (its SEV-SNP members)."""
+    """One verified build of the index (its SEV-SNP members)."""
 
     uefi_sha384: str
     endorsement_sha256: str
@@ -823,7 +820,7 @@ class SnpAdmission:
 
 @dataclass(frozen=True)
 class TdxBuild:
-    """One verified build of the owner's index (its TDX members): the MRTDs Google endorses for any
+    """One verified build of the index (its TDX members): the MRTDs Google endorses for any
     RAM size (``ram_gib`` 0) or one RAM size, never an early-accept entry, and the CFV derived from
     Google's binary of that build (None until the binary is in the index: never admitted then)."""
 
@@ -850,7 +847,7 @@ class TdxAdmission:
 
 
 class OwnerFirmwareIndex:
-    """The lookup index of the owner's verified endorsements (immutable)."""
+    """The lookup index of the verified endorsements (immutable)."""
 
     def __init__(self, builds, root_sha256: str, tdx_builds=()):
         self.builds = tuple(sorted(builds, key=lambda build: build.uefi_sha384))
@@ -1140,7 +1137,7 @@ def check_mrtd(index: OwnerFirmwareIndex, mrtd: str, ram_gib: Optional[int], gcp
 
 @dataclass(frozen=True)
 class Rtmr0Selection:
-    """The admitted build and the RTMR0 values the client accepts on it: ``values[0]`` is the
+    """The admitted build and the RTMR0 values accepted on it: ``values[0]`` is the
     base template's, ``values[n]`` the n-th signed ACPI-variant alternative's, each at that
     build's CFV; ``matched`` is the index the pre-read RTMR0 equals, or None."""
 
@@ -1153,8 +1150,7 @@ def select_rtmr0(admissions, templates, observed_rtmr0: Optional[str]) -> Rtmr0S
     """The admitted build and template whose value equals the pre-read RTMR0 (builds that share an
     MRTD differ in the CFV only; ``templates`` = [the base template, *its signed ACPI-variant
     alternatives]), else the newest build with no match: the verifier's exact RTMR0 compare then
-    decides (the validator's rules). Values are
-    exact, one per signed template: no pattern."""
+    decides (the validator's rules). Values are exact, one per signed template: no pattern."""
     observed = str(observed_rtmr0 or "").upper()
     selections = []
     for admission in admissions:
@@ -1241,8 +1237,8 @@ def refresh(
     build (``ovmf_x64_csm/<uefi>.fd``), kept only when it hashes to the endorsed digest and names
     one CFV. Returns ``(index, lines)``. Nothing is written for a refused endorsement or binary.
     A stored build whose refetch fails (Google no longer serves its object, or serves it changed) is
-    kept as it is and reported: removal is not revocation;
-    a stored build that no longer verifies is still removed."""
+    kept as it is and reported: removal is not revocation. A stored build that no longer verifies is
+    removed."""
     directory = directory or firmware_dir()
     fetch = fetch or _download
     lines = []

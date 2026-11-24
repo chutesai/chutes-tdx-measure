@@ -103,7 +103,7 @@ fn snp_dump(config: &Cli, image_config: &ImageConfig, dir: &Path) -> Result<()> 
         .as_deref()
         .ok_or_else(|| anyhow!("--snp-dump requires --snp-dump-image (a declared digest)"))?;
     let version = config.snp_qemu_version.as_deref().ok_or_else(|| {
-        anyhow!("--snp-dump requires --snp-qemu-version (the launch contract's QEMU)")
+        anyhow!("--snp-dump requires --snp-qemu-version (the SEV-SNP host's QEMU)")
     })?;
     if config.create_acpi_tables.is_some()
         || config.qemu_dsc_sha256.is_some()

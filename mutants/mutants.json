@@ -1,9 +1,9 @@
 {
  "repository": "chutesai/chutes-tdx-measure",
- "group": "the measure kit's checks: the measurement document (chutes-tdx-gate spec/SPEC.md section 4.2), verify-quote, capture and predict",
+ "group": "chutes-tdx-measure's checks: the measurement document (chutes-tdx-gate spec/SPEC.md section 4.2), verify-quote, capture and predict",
  "mutants": [
   {
-   "id": "M01",
+   "id": "document-size-bound",
    "check": "4.2 step 1: the 64 KiB size bound removed",
    "edits": [
     {
@@ -26,7 +26,7 @@
    ]
   },
   {
-   "id": "M02",
+   "id": "document-signature",
    "check": "4.2 step 2: the signature not verified",
    "edits": [
     {
@@ -49,7 +49,7 @@
    ]
   },
   {
-   "id": "M03",
+   "id": "document-duplicate-keys",
    "check": "4.2 step 3: duplicate keys accepted",
    "edits": [
     {
@@ -72,7 +72,7 @@
    ]
   },
   {
-   "id": "M04",
+   "id": "document-entry-forms",
    "check": "4.2 step 4: the closed entry forms not enforced (both rtmr0 and a template)",
    "edits": [
     {
@@ -95,7 +95,7 @@
    ]
   },
   {
-   "id": "M05",
+   "id": "document-image-sha256",
    "check": "4.2 step 5: image_sha256 not compared",
    "edits": [
     {
@@ -118,7 +118,7 @@
    ]
   },
   {
-   "id": "M06",
+   "id": "match-floor-exact-entry",
    "check": "4.2 matching: the floor skipped for an exact entry",
    "edits": [
     {
@@ -146,7 +146,7 @@
    ]
   },
   {
-   "id": "M07",
+   "id": "match-exact-mrtd",
    "check": "4.2 matching: the exact form ignores MRTD",
    "edits": [
     {
@@ -169,7 +169,7 @@
    ]
   },
   {
-   "id": "M08",
+   "id": "match-exact-rtmr0",
    "check": "4.2 matching: the exact form ignores RTMR0",
    "edits": [
     {
@@ -192,7 +192,7 @@
    ]
   },
   {
-   "id": "M09",
+   "id": "match-rtmr1",
    "check": "4.2 matching: RTMR1 not compared",
    "edits": [
     {
@@ -215,7 +215,7 @@
    ]
   },
   {
-   "id": "M10",
+   "id": "match-rtmr3",
    "check": "4.2 matching: a pinned RTMR3 not compared",
    "edits": [
     {
@@ -238,7 +238,7 @@
    ]
   },
   {
-   "id": "M11",
+   "id": "match-machine-type",
    "check": "4.2 matching: entries of another machine type counted",
    "edits": [
     {
@@ -261,7 +261,7 @@
    ]
   },
   {
-   "id": "M12",
+   "id": "rtmr0-fold-order",
    "check": "the RTMR0 fold with its operands swapped",
    "edits": [
     {
@@ -284,7 +284,7 @@
    ]
   },
   {
-   "id": "M13",
+   "id": "key-proof-user-id",
    "check": "the key proof without the user id",
    "edits": [
     {
@@ -307,7 +307,7 @@
    ]
   },
   {
-   "id": "M14",
+   "id": "floor-cl-spec",
    "check": "the floor: the changelist code floor off",
    "edits": [
     {
@@ -330,7 +330,7 @@
    ]
   },
   {
-   "id": "M15",
+   "id": "floor-svn",
    "check": "the floor: the SVN floor off",
    "edits": [
     {
@@ -353,7 +353,7 @@
    ]
   },
   {
-   "id": "M16",
+   "id": "floor-endorsed-at",
    "check": "the floor: the golden timestamp floor off",
    "edits": [
     {
@@ -376,7 +376,7 @@
    ]
   },
   {
-   "id": "M17",
+   "id": "floor-denied-builds",
    "check": "the floor: denied builds admitted",
    "edits": [
     {
@@ -399,7 +399,7 @@
    ]
   },
   {
-   "id": "M18",
+   "id": "admission-ram-specific",
    "check": "the admission: a RAM-specific entry admitted",
    "edits": [
     {
@@ -422,7 +422,7 @@
    ]
   },
   {
-   "id": "M19",
+   "id": "verify-debug-bit",
    "check": "verify: the debug bit not checked",
    "edits": [
     {
@@ -445,7 +445,7 @@
    ]
   },
   {
-   "id": "M20",
+   "id": "verify-binding",
    "check": "verify: the binding not compared",
    "edits": [
     {
@@ -468,7 +468,7 @@
    ]
   },
   {
-   "id": "M21",
+   "id": "verify-project-pin",
    "check": "verify: the project pin off",
    "edits": [
     {
@@ -491,7 +491,7 @@
    ]
   },
   {
-   "id": "M22",
+   "id": "verify-mrconfigid",
    "check": "verify: MRCONFIGID not checked",
    "edits": [
     {
@@ -514,7 +514,7 @@
    ]
   },
   {
-   "id": "M23",
+   "id": "verify-mrownerconfig",
    "check": "verify: MROWNERCONFIG not checked",
    "edits": [
     {
@@ -537,7 +537,7 @@
    ]
   },
   {
-   "id": "M24",
+   "id": "verify-provider-root-last",
    "check": "verify: provider_root asked although a row failed (not last)",
    "edits": [
     {
@@ -560,7 +560,7 @@
    ]
   },
   {
-   "id": "M25",
+   "id": "capture-ccel-replay",
    "check": "capture: the CCEL replay not compared with the quote",
    "edits": [
     {
@@ -583,7 +583,7 @@
    ]
   },
   {
-   "id": "M26",
+   "id": "capture-nonce",
    "check": "capture: the capture nonce not checked",
    "edits": [
     {
@@ -606,7 +606,7 @@
    ]
   },
   {
-   "id": "M27",
+   "id": "predict-kernel-loadimage-event",
    "check": "predict: the kernel's LoadImage event dropped from RTMR1",
    "edits": [
     {
@@ -629,7 +629,7 @@
    ]
   },
   {
-   "id": "M28",
+   "id": "predict-stub-257-rtmr2",
    "check": "predict: the 257 stub modelled as measuring nothing into RTMR2",
    "edits": [
     {
@@ -652,7 +652,7 @@
    ]
   },
   {
-   "id": "M29",
+   "id": "predict-section-padding",
    "check": "predict: a section measured without its zero padding to VirtualSize",
    "edits": [
     {
@@ -675,7 +675,7 @@
    ]
   },
   {
-   "id": "M30",
+   "id": "predict-unmodelled-stub",
    "check": "predict: an unmodelled stub (256) given the 255 model",
    "edits": [
     {
@@ -698,7 +698,7 @@
    ]
   },
   {
-   "id": "M31",
+   "id": "predict-pcrsig",
    "check": "predict: .pcrsig measured",
    "edits": [
     {
@@ -721,7 +721,7 @@
    ]
   },
   {
-   "id": "M32",
+   "id": "verify-td-attributes-missing",
    "check": "verify: a verdict without TD attributes accepted",
    "edits": [
     {
@@ -744,7 +744,7 @@
    ]
   },
   {
-   "id": "M33",
+   "id": "verify-index-unproven-quote",
    "check": "verify: Google's firmware index asked for an unproven quote's MRTD",
    "edits": [
     {
@@ -767,7 +767,7 @@
    ]
   },
   {
-   "id": "M34",
+   "id": "verify-own-project-pin",
    "check": "verify: the VM's own project taken as its pin",
    "edits": [
     {
@@ -790,7 +790,7 @@
    ]
   },
   {
-   "id": "M35",
+   "id": "cli-project-pin-required",
    "check": "verify-quote: run without a project pin",
    "edits": [
     {
@@ -813,7 +813,7 @@
    ]
   },
   {
-   "id": "M36",
+   "id": "cli-allowed-project-with-platform",
    "check": "verify-quote: --allowed-project ignored when --platform is given",
    "edits": [
     {
@@ -836,7 +836,7 @@
    ]
   },
   {
-   "id": "M37",
+   "id": "cli-floor-combined",
    "check": "verify-quote: --floor replaces the platform's floor",
    "edits": [
     {
@@ -859,7 +859,7 @@
    ]
   },
   {
-   "id": "M38",
+   "id": "floor-combine-maximum",
    "check": "Floor.combine takes the lower minimum",
    "edits": [
     {
@@ -882,7 +882,7 @@
    ]
   },
   {
-   "id": "M39",
+   "id": "cli-signature-newline",
    "check": "verify-document: a signature file's trailing newline refused",
    "edits": [
     {
@@ -905,7 +905,7 @@
    ]
   },
   {
-   "id": "M40",
+   "id": "cli-key-proof-without-key",
    "check": "key proof without --key: a traceback",
    "edits": [
     {
@@ -928,7 +928,7 @@
    ]
   },
   {
-   "id": "M41",
+   "id": "predict-zero-rtmr2-not-signable",
    "check": "predict: the all-zero RTMR2 alternative offered as signable",
    "edits": [
     {
@@ -951,7 +951,7 @@
    ]
   },
   {
-   "id": "M42",
+   "id": "capture-dcap-by-default",
    "check": "capture: the quote not verified with Intel DCAP unless asked",
    "edits": [
     {
@@ -974,7 +974,7 @@
    ]
   },
   {
-   "id": "M43",
+   "id": "capture-verified-needs-nonce",
    "check": "capture: a verified capture without the capture nonce",
    "edits": [
     {
@@ -997,7 +997,7 @@
    ]
   },
   {
-   "id": "M44",
+   "id": "capture-policy-verdict",
    "check": "capture: a verdict the TDX policy refuses accepted",
    "edits": [
     {
@@ -1020,7 +1020,7 @@
    ]
   },
   {
-   "id": "M45",
+   "id": "capture-debug-td",
    "check": "capture: a debug TD's verdict, or one without attributes, accepted",
    "edits": [
     {
@@ -1043,7 +1043,7 @@
    ]
   },
   {
-   "id": "M46",
+   "id": "capture-intel-collateral-only",
    "check": "capture: Intel's collateral from whatever source the environment names",
    "edits": [
     {
@@ -1066,7 +1066,7 @@
    ]
   },
   {
-   "id": "M47",
+   "id": "capture-unverified-notice",
    "check": "capture: an unverified capture printed with the verified capture's notice",
    "edits": [
     {
@@ -1089,7 +1089,7 @@
    ]
   },
   {
-   "id": "M48",
+   "id": "verifier-judges-signers",
    "check": "verify-quote and capture: the vendored one-step verifier, which does not judge the collateral's signers",
    "edits": [
     {
@@ -1112,7 +1112,7 @@
    ]
   },
   {
-   "id": "M49",
+   "id": "collateral-signer-refusal",
    "check": "collateral: the signer rule's refusal dropped, collateral under any signer reaches Intel's verifier",
    "edits": [
     {
@@ -1135,7 +1135,7 @@
    ]
   },
   {
-   "id": "M50",
+   "id": "collateral-qe-identity-signer",
    "check": "collateral: the QE Identity's signer not judged",
    "edits": [
     {
@@ -1158,7 +1158,7 @@
    ]
   },
   {
-   "id": "M51",
+   "id": "collateral-tcb-info-signer",
    "check": "collateral: the TCB Info's signer not judged",
    "edits": [
     {
@@ -1181,7 +1181,7 @@
    ]
   },
   {
-   "id": "M52",
+   "id": "collateral-two-certificates",
    "check": "collateral: an issuer chain with a third certificate, or text after the two, accepted",
    "edits": [
     {
@@ -1204,7 +1204,7 @@
    ]
   },
   {
-   "id": "M53",
+   "id": "collateral-signer-common-name",
    "check": "collateral: the signer's common name not required to be Intel SGX TCB Signing",
    "edits": [
     {
@@ -1227,7 +1227,7 @@
    ]
   },
   {
-   "id": "M54",
+   "id": "collateral-signer-signature",
    "check": "collateral: the signer's signature not verified under the pinned Intel SGX root",
    "edits": [
     {
@@ -1250,7 +1250,7 @@
    ]
   },
   {
-   "id": "M55",
+   "id": "collateral-pinned-root",
    "check": "collateral: the chain's second certificate not required to be the pinned root, byte for byte",
    "edits": [
     {
@@ -1273,7 +1273,7 @@
    ]
   },
   {
-   "id": "M56",
+   "id": "collateral-canonical-base64",
    "check": "collateral: a certificate's base64 not required to be canonical",
    "edits": [
     {
@@ -1296,7 +1296,7 @@
    ]
   },
   {
-   "id": "M57",
+   "id": "collateral-judged-text",
    "check": "collateral: the verifier fetches its own collateral after the signer rule, not the judged text",
    "edits": [
     {
@@ -1319,7 +1319,7 @@
    ]
   },
   {
-   "id": "M58",
+   "id": "collateral-stale-no-verdict",
    "check": "collateral: stale collateral handed to the verifier instead of no verdict",
    "edits": [
     {
@@ -1342,7 +1342,7 @@
    ]
   },
   {
-   "id": "M42",
+   "id": "predict-stub-258-no-kernel-event",
    "check": "predict: systemd-stub 258 and later modelled with the kernel's LoadImage event in RTMR1",
    "edits": [
     {

@@ -2,36 +2,36 @@
  "schema": "chutes-tdx-measure.vendor-pins.v1",
  "files": {
   "chutes_attest/quote.py": {
-   "sha256": "b7cd5d7921edecb00fd11634aef4a03a6beab7f104ac9a016ff29d01c071a407",
-   "source": "chutes-attest 0.9.0 (sek8s 6258257e, src/chutes-attest/chutes_attest/quote.py), comments edited"
+   "sha256": "1cafc6d7f656937c6ec6da4299a5fec8b09ff513f2121484f52d409870c64a09",
+   "source": "chutes-attest 0.9.0, chutes_attest/quote.py, comments edited"
   },
   "chutes_attest/tdx_verify.py": {
-   "sha256": "e044fec34f994c56a44ffafbdf2fecf291ccc71b202db908a8ebf994c5229152",
-   "source": "chutes-attest 0.9.0 (sek8s 6258257e, src/chutes-attest/chutes_attest/tdx_verify.py), comments edited"
+   "sha256": "1fd1a191bae1fed110ceaeba2a05bd63c15f46783e7496618b56ab11244a5dc3",
+   "source": "chutes-attest 0.9.0, chutes_attest/tdx_verify.py, comments edited"
   },
   "chutes_attest/tdx_policy.py": {
-   "sha256": "5d1e138fb0f8e4c4f406063079da6701abb440dbd23c638c7de1f055e6b468da",
-   "source": "chutes-attest 0.9.0 (sek8s 6258257e, src/chutes-attest/chutes_attest/tdx_policy.py), comments edited"
+   "sha256": "94aa2772c4142f6e5d90a34a87f1b39828a8d7bf440aa2ec42d7e266fc743c23",
+   "source": "chutes-attest 0.9.0, chutes_attest/tdx_policy.py, comments edited"
   },
   "chutes_attest/intel_root.py": {
-   "sha256": "27c09f48634cb26953cc7170618a073ba3683858558d45605164bba3c1164184",
-   "source": "chutes-attest 0.9.0 (sek8s 6258257e, src/chutes-attest/chutes_attest/intel_root.py), comments edited"
+   "sha256": "5c12f350555717245dddc3a42d9298f5a1106fa6a2b60070705f95f4af63b163",
+   "source": "chutes-attest 0.9.0, chutes_attest/intel_root.py, comments edited"
   },
   "chutes_attest/gcp_tdx_provenance.py": {
-   "sha256": "eddba19e4101e043dc0f27711378d7b5c09e2e4c2737dd01db3781067c176bc3",
-   "source": "chutes-attest 0.9.0 (sek8s 6258257e, src/chutes-attest/chutes_attest/gcp_tdx_provenance.py), comments edited"
+   "sha256": "4545af6ccd8572669ce8b10dff399e04055f3d586d23f1057026d97559977b50",
+   "source": "chutes-attest 0.9.0, chutes_attest/gcp_tdx_provenance.py, comments edited"
   },
   "chutes_attest/rtmr_replay.py": {
-   "sha256": "78f364ae171ab1fdd0cca436b7cec9cfd282f2b8ae03d6588073e8301fc747b4",
-   "source": "chutes-attest 0.9.0 (sek8s 6258257e, src/chutes-attest/chutes_attest/rtmr_replay.py), unchanged"
+   "sha256": "4b68d2ac079165ab3dc8b484746b19346aa72ad00ee186d4f14e5bd08568c69e",
+   "source": "chutes-attest 0.9.0, chutes_attest/rtmr_replay.py, comments edited"
   },
   "gcp_prediction.py": {
-   "sha256": "26ad2ee26c8812903f04c0b8924a7c0e5ffb9dd7e393f26dcc247a143fee10a5",
-   "source": "sek8s 6258257e guest-tools/scripts/gcp_prediction.py, comments edited"
+   "sha256": "54b6b3aec4d81e977760f78e8d6e8d36077ae74f5365bdf0da31e605702eb45a",
+   "source": "Chutes' GCP measurement model, gcp_prediction.py, comments edited"
   },
   "owner_vm_firmware.py": {
-   "sha256": "3deae10ef1f6090a0db0e53ea881e34d9badaed67c9bd3339931d0b59fc436bc",
-   "source": "the Chutes SDK's chutes/entrypoint/owner_vm_firmware.py, comments edited"
+   "sha256": "8c28bd1a68607da88422fbbe981c4cba0fd9ff716acb01883a42355bf5ac018e",
+   "source": "the Chutes SDK, chutes/entrypoint/owner_vm_firmware.py, comments edited"
   }
  }
 }

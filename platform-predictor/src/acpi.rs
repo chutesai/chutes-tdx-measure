@@ -485,9 +485,8 @@ fn check_dsc_sha256(pkg: &QemuPkg, version: Option<&str>, dsc_sha256: &str) -> R
 
 // The VFIO stand-ins of `qemu.acpi_devices`. The general form is the dump QEMU's `pci-bar-stub`
 // (`pci-bar-stub.c`): `pci-bar-stub,bus=<bus>,addr=<addr>,bars=<layout>[,vendor=..][,device=..]
-// [,class=..]`. Three named presets keep their earlier `pci-testdev` spelling and stand for fixed
-// `pci-bar-stub` layouts, with pci-testdev's identity (1b36:0005, class 00ff) so the dumped tables
-// are the same bytes as before:
+// [,class=..]`. Three named presets in `pci-testdev` spelling stand for fixed `pci-bar-stub`
+// layouts with pci-testdev's identity (1b36:0005, class 00ff):
 //   `pci-testdev,membar=<MiB>M,membar-backed=off,x-rtxpro6000se=on,bus=<bus>,addr=<addr>`
 //       RTX PRO 6000 SE: BAR0 64 MiB, BAR2 <MiB> MiB, BAR4 32 MiB, all 64-bit prefetchable;
 //   `pci-testdev,membar=<MiB>M,membar-backed=off,x-h200=on,bus=<bus>,addr=<addr>`
@@ -1226,7 +1225,7 @@ pub fn dump_snp_platform_tables(
         );
     }
     if qemu_package_version.trim().is_empty() {
-        bail!("the SEV-SNP dump needs the launch contract's QEMU package version");
+        bail!("the SEV-SNP dump needs the SEV-SNP host's QEMU package version");
     }
     let qemu = boot_config
         .qemu
@@ -1254,7 +1253,7 @@ pub fn dump_snp_platform_tables(
     let labelled = String::from_utf8_lossy(&inspected.stdout).trim().to_string();
     if labelled != qemu_package_version {
         bail!(
-            "the SEV-SNP dump image carries QEMU {labelled:?}, the launch contract names \
+            "the SEV-SNP dump image carries QEMU {labelled:?}, --snp-qemu-version names \
              {qemu_package_version:?}"
         );
     }

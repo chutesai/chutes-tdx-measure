@@ -275,7 +275,7 @@ impl<'a> Tdvf<'a> {
             .image_config
             .as_ref()
             .is_some_and(|config| config.form == MetadataForm::LegacyFork);
-        // The chutesai/tdx-measure form measured every direct boot with this sequence.
+        // A chutesai/tdx-measure document measures every direct boot with this sequence.
         let chutes_202605 = if fork_form {
             machine.direct_boot
         } else {

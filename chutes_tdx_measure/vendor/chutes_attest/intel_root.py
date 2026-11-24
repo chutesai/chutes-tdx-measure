@@ -1,12 +1,11 @@
-"""Pinned Intel SGX/TDX provisioning root certificate (user-side verifier copy).
+"""Pinned Intel SGX/TDX provisioning root certificate.
 
 The TDX quote's PCK certificate chain roots at the "Intel SGX Root CA" (the same root anchors
 SGX and TDX provisioning). The verifier pins it explicitly and verifies quotes via dcap-qvl's
-``verify_with_root_ca`` instead of delegating to the library's built-in root -- the same
-deliberate trust-anchor posture as the AMD ARK pin in snp_verify (ARK_PUBKEY_SHA384) and the
-Google EK/AK CA Root pin in gcp_vtpm. Chutes' validator pins the same root.
+``verify_with_root_ca`` instead of relying on the library's built-in root. Chutes' validator pins
+the same root.
 
-Provenance (verified 2026-06-12 from two independent sources, byte-identical):
+Provenance (two independent sources, byte-identical):
   - Intel PCS: https://certificates.trustedservices.intel.com/Intel_SGX_Provisioning_Certification_RootCA.pem
   - the root embedded in the dcap-qvl 0.3.12 verification library itself
   sha256(DER) = 44a0196b2b99f889b8e149e95b807a350e7424964399e885a7cbb8ccfab674d3

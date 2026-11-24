@@ -1,11 +1,10 @@
 """Intel TDX quote verification: dcap-qvl 0.5.3 plus the shared TDX policy module.
 
-``verify_tdx_quote_bytes`` is the one TDX verification step of chutes-attest (the v1 manifest
-path, the v2 receipt path) and of the release tooling (``guest-tools/scripts/gpu-evidence.py``).
-It applies the validator's policy through the shared policy module ``tdx_policy``:
+``verify_tdx_quote_bytes`` is chutes-attest's one TDX verification step. It applies the
+validator's policy through the shared policy module ``tdx_policy``:
 
 1. the installed ``dcap_qvl`` must be exactly ``DCAP_QVL_AUDITED_VERSION`` (the audited fallback
-   and the parity claim hold only for it); anything else is ``VerifierUnavailable``;
+   and the validator's identical verdict hold only for it); anything else is ``VerifierUnavailable``;
 2. collateral comes from ONE seam, ``_fetch_collateral(raw, source)``: ``intel-pcs`` (default,
    Intel's PCS), ``phala-pccs`` or an explicit ``https://`` PCCS, chosen by the caller or by
    ``TDX_COLLATERAL_SOURCE``;
@@ -18,8 +17,7 @@ It applies the validator's policy through the shared policy module ``tdx_policy`
    ``td_attributes`` and ``not_debug``.
 
 Every verdict also names the collateral it was reached under (``TdxVerdict.collateral_sha256``,
-``collateral_sha256``): the release tooling's bare-metal capture records it as the verifier's
-collateral, which a hardware-qualification row names.
+``collateral_sha256``), so a recorded verdict can be re-checked offline under it.
 
 The library is imported lazily, so the package imports cleanly before it is installed.
 """
@@ -54,8 +52,7 @@ NAMED_COLLATERAL_SOURCES = ("intel-pcs", "phala-pccs")
 class VerifierUnavailable(RuntimeError):
     """No verdict: the verifier's own inputs (library, collateral, NVIDIA verifier) cannot decide.
 
-    Never a verdict against the TD: the v1 CLI exits 2 "verification could not complete" and the
-    v2 path reports a failing ``runtime_evidence`` row.
+    Never a verdict against the TD: callers report "no verdict" and ask for a retry.
     """
 
 
@@ -166,8 +163,8 @@ def canonical_collateral_json(collateral) -> Optional[str]:
 
 
 def collateral_json_sha256(text: str) -> str:
-    """The digest a hardware-qualification row's ``verifier.collateral_sha256`` names: the
-    SHA-256 of the canonical collateral JSON text plus one trailing newline."""
+    """The SHA-256 of the canonical collateral JSON text plus one trailing newline: the digest a
+    recorded verdict names as its collateral."""
     return hashlib.sha256(text.encode("ascii") + b"\n").hexdigest()
 
 
@@ -273,8 +270,8 @@ async def verify_tdx_quote_bytes(
             f"stale TDX collateral from {source}: "
             + "; ".join(f"{check.name}: {check.detail}" for check in failed(freshness))
         )
-    # CPU-bound signature and collateral checks run off the event loop (the v2 path and the
-    # e2e-keys sidecar verify concurrently).
+    # CPU-bound signature and collateral checks run off the event loop, so concurrent verifications
+    # do not block it.
     return await asyncio.to_thread(
         _decide,
         dcap_qvl,

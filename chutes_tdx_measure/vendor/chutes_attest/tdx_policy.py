@@ -1,8 +1,7 @@
 """Intel TDX verification policy: pure, settings-free verdict, TCB-resolution and freshness rules.
 
-This module is the TDX policy that Chutes' validator, the chutes-attest verifier and sek8s's
-release tooling (``guest-tools/scripts/gpu-evidence.py``) apply to the output of Intel's DCAP
-quote-verification library ``dcap-qvl``.  Each of them carries a copy
+This module is the TDX policy that Chutes' validator and Chutes' verifiers apply to the output of
+Intel's DCAP quote-verification library ``dcap-qvl``.  Each of them carries a copy
 (``TDX_POLICY_MODULE_VERSION`` names the version), so it must stay free of every
 non-standard-library import and of every project-specific import: it imports only
 ``dataclasses``, ``datetime``, ``json``, ``struct`` and ``typing``.  The library itself never

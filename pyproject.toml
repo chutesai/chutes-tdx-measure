@@ -7,8 +7,7 @@ name = "chutes-tdx-measure"
 version = "0.1.0"
 description = "Predict, capture, write, sign and verify TDX measurement documents for Chutes' bring-your-own TDX VM endpoints"
 readme = "README.md"
-# dcap-qvl 0.5.3 (Intel DCAP quote verification, the audited version chutes-attest 0.9.0 pins)
-# ships wheels for these interpreters.
+# dcap-qvl 0.5.3 (Intel DCAP quote verification) ships wheels for these interpreters.
 requires-python = ">=3.10,<3.13"
 license = "MIT"
 license-files = ["LICENSE"]

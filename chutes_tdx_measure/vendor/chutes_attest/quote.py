@@ -66,10 +66,9 @@ class ParsedQuote:
 
     @property
     def nonce(self) -> str:
-        """report_data[0:32] as hex: the tagged slot the producer bound for the caller's nonce.
+        """report_data[0:32] as hex: the slot where a Chutes guest binds the caller's nonce.
 
-        Network-reachable quote routes bind sha256(public-quote tag || nonce) here; the
-        statement quote binds its own slot. REPORTDATA = slot(32B) || sha256(server cert pubkey).
+        Such a guest's REPORTDATA is this slot followed by sha256 of its TLS server-cert public key.
         """
         return self.report_data[:64].lower()
 

@@ -24,7 +24,7 @@ _MEASUREMENT_CODES = {
 
 
 def attest_report_data(nonce: bytes, public_key: bytes) -> bytes:
-    """The /attest rule (chutes-tdx-gate spec/SPEC.md §4.1): SHA-512(tag || 0x00 || nonce || public_key)."""
+    """The /attest rule (chutes-tdx-gate spec/SPEC.md, section 4.1): SHA-512(tag || 0x00 || nonce || public_key)."""
     return hashlib.sha512(ATTEST_TAG + b"\x00" + nonce + public_key).digest()
 
 

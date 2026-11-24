@@ -1,5 +1,5 @@
 """``chutes-tdx-measure``: predict, capture, write, sign and verify TDX measurement documents
-for Chutes' TDX VM endpoints. The Chutes client ships the same code as ``chutes tdx …``.
+for Chutes' TDX VM endpoints.
 
 Exit status: 0 success (every row passed), 1 a decided refusal, 2 no verdict or a usage error.
 """
@@ -85,9 +85,8 @@ def cmd_capture(args):
         if nonce is None:
             raise SystemExit("give --nonce (the capture nonce you set for your test boot): the quote is verified with "
                              "Intel DCAP and must carry it; or --unverified for registers nothing authenticates")
-        # Intel's own service only, whatever TDX_COLLATERAL_SOURCE says. collateral.py checks the
-        # signers from any source; capture's registers can end up signed, so no PCCS chooses which
-        # of Intel's collateral they are verified under.
+        # Always Intel's own service, whatever TDX_COLLATERAL_SOURCE says: captured registers can end
+        # up signed, so no PCCS chooses the collateral they are verified under.
         verifier = verify.default_verifiers(collateral_source="intel-pcs").quote
     result = capture.capture(quote, ccel, nonce=nonce, verify_quote=verifier)
     _out(result, args.output)

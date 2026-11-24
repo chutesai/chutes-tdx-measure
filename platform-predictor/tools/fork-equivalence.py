@@ -3,29 +3,31 @@
 # SPDX-License-Identifier: Apache-2.0
 """Run host profiles through the chutesai/tdx-measure fork and through this predictor; compare.
 
-Every JSON file in PROFILES is one host profile as the API stores it, one API record
-(``{"fingerprint", "measured", "profile"}``), a list of such records, or a ready tdx-measure
-metadata document (it has ``boot_config``). chutes-cvm renders each profile into the metadata it
-hands the fork today (``QemuCommand.build`` with ``MeasurementContext``, then ``ImageConfig``), so
-it must be importable: installed, or its source directory given with ``--chutes-cvm``.
+Every JSON file in PROFILES is one host profile as the Chutes API stores it, one record of
+``GET /servers/tdx/host_profiles`` (``{"fingerprint", "measured", "profile"}``), a list of such
+records, or a ready tdx-measure metadata document (it has ``boot_config``). chutes-cvm renders each
+profile into the metadata it hands the fork (``QemuCommand.build`` with ``MeasurementContext``, then
+``ImageConfig``), so it must be importable: installed, or its source directory given with
+``--chutes-cvm``. ``--firmware-dir`` holds ``OVMF.inteltdx.fd`` and ``OVMF.amdsev.fd``, as
+chutes-cvm's ``--bios-dir`` does.
 
 Each profile is measured three times, each run in a directory of its own:
 
-- the fork, exactly as chutes-cvm runs it (``--platform-only --create-acpi-tables DIST``);
-- this predictor on the same document (the fork form, accepted unchanged);
-- this predictor on the document in the versioned form (``metadata_version`` 1 with
-  ``firmware_profile`` ``edk2-stable202605`` and ``smbios_tables``), what chutes-cvm sends once it
-  moves to that form.
+- the fork, as chutes-cvm runs it (``--platform-only --create-acpi-tables DIST``);
+- this predictor on the same document (the fork form);
+- this predictor on the document in version 1 form (``metadata_version`` 1 with
+  ``firmware_profile`` ``edk2-stable202605`` and ``smbios_tables``).
 
 RTMR1 and RTMR2 depend only on the kernel, initrd and command line, so they are measured once per
-binary (``--runtime-only``) from ``--image`` (its staged ``.vmlinuz``, ``.initrd`` and
+binary (``--runtime-only``) from ``--image`` (a release image's staged ``.vmlinuz``, ``.initrd`` and
 ``.cmdline``, as chutes-cvm reads them) or ``--kernel``/``--initrd``/``--cmdline``, and reported on
 every row. The report gives MRTD, RTMR0 (both forms), RTMR1, RTMR2 and, for diagnosis, the dumped
 ACPI and SMBIOS tables of every profile as match or MISMATCH. It exits 0 only when everything
 matches.
 
-The runs are sequential: the fork builds its dump image under one fixed tag and runs it by that
-tag. Both binaries need Docker; chutes-cvm's dump shapes run under KVM (``/dev/kvm``).
+The runs are sequential: the fork builds its dump image under one fixed tag (with
+``docker build --progress plain``, which needs Docker's buildx plugin) and runs it by that tag. Both
+binaries need Docker; chutes-cvm's dump shapes run under KVM (``/dev/kvm``).
 """
 
 from __future__ import annotations

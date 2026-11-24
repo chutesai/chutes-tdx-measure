@@ -297,9 +297,9 @@ pub(crate) fn patch_type4_processor_id(data: &mut [u8], processor_id: &[u8; 8]) 
     Ok(())
 }
 
-/// Refuses QEMU SMBIOS tables that the chutesai/tdx-measure fork measured differently from
-/// edk2-stable202605: a Type 0 structure (that fork appended OVMF's Type 0 regardless) or one of
-/// the types the edk2 filter clears whole, 11, 15, 18, 31, 33 and 128 and above (that fork cleared
+/// Refuses QEMU SMBIOS tables that the chutesai/tdx-measure fork measures differently from
+/// edk2-stable202605: a Type 0 structure (that fork appends OVMF's Type 0 regardless) or one of
+/// the types the edk2 filter clears whole, 11, 15, 18, 31, 33 and 128 and above (that fork clears
 /// only their formatted area). For every other table the two measurements are the same bytes.
 pub(crate) fn check_fork_form_measurable(data: &[u8]) -> Result<()> {
     let mut start = 0usize;

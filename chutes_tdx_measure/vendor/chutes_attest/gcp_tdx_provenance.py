@@ -14,7 +14,7 @@ reference tool is google/go-tdx-guest ``tools/gceprovenance``, the PZID ``gce/pz
 Google's reference (go-tdx-guest ``FetchProvenanceData``) only requires that the registry document
 exists; the instance's zone is bound by the PZID in MR_OWNER. This module also requires the
 document's zone to be in the **same region** as the named zone: Google lists some hosts under
-another zone of their region (on 2026-11-07, three distinct europe-west4-a hosts were listed as
+another zone of their region (three distinct europe-west4-a hosts have been listed as
 ``europe-west4-b``). A zone is
 ``<region>-<letter>`` and its region is the zone minus that last ``-<letter>``
 (:func:`zone_region`); a zone of another shape is refused (``identity_invalid`` for the named zone,
@@ -34,8 +34,7 @@ certificate valid at ``now``. Never a second quote, and never a value the guest 
 Outcomes of :func:`verify`: a :class:`Provenance` (Google vouches for the instance), a
 :class:`ProvenanceRefused` with a fixed code (a decided negative: refuse), or
 :class:`ProvenanceUnavailable` (no verdict: the registry did not answer). Unavailable is a
-``tdx_verify.VerifierUnavailable``: callers refuse and ask for a retry; it is never a pass and
-never the earlier "unassured" result.
+``tdx_verify.VerifierUnavailable``: callers refuse and ask for a retry; it is never a pass.
 
 Trust: Intel (the PCK chain and its PPID) and Google (its VMM sets MR_OWNER; its registry lists
 only its hosts). The registry document is unsigned: its trust is TLS to storage.googleapis.com

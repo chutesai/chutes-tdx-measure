@@ -1,8 +1,8 @@
 """``predict``: an image's TDX measurements on a GCE c3 machine, from its archive.
 
 For the image template's layout (a unified kernel image booted directly as \\EFI\\BOOT\\BOOTX64.EFI,
-no shim or GRUB, Secure Boot off), using the GCP TDX model of sek8s (vendored ``gcp_prediction``,
-validated against GCP captures) and systemd-stub's source:
+no shim or GRUB, Secure Boot off), from the vendored GCP TDX model (``vendor/gcp_prediction.py``)
+and systemd-stub's source:
 
 - **RTMR1**: the calling action, a separator, the GPT event (the disk's primary GPT header and its
   used entries), the UKI's Authenticode digest, then the two exit-boot-services actions. Whether the

@@ -173,10 +173,10 @@ def replay_sha384(events: list[Event]) -> dict[str, str]:
 
 
 def verify_replay(data, quote_measurements, receipt_measurements):
-    """Replay measured events and compare with both hardware and receipt predictions.
+    """Replay the measured events and compare RTMR0 to RTMR2 with the quote's values and with
+    predicted values (``receipt_measurements``).
 
-    This checks event-log consistency. Rebuilding artifact bytes is independently
-    represented by the signed two-builder record, never inferred from this log.
+    This checks the event log's consistency only.
     """
     replayed = replay_sha384(parse_event_log(data))
     for index in range(3):

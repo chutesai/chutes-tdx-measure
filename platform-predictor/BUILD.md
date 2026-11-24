@@ -17,8 +17,9 @@ docker run --rm --user "$(id -u):$(id -g)" --env CARGO_HOME=/target/cargo-home \
 
 The binary records the paths it was built from (`/src`, `/target/cargo-home`), so the same source,
 `Cargo.lock` files and image give the same bytes only with these mounts; this is the build whose
-sha256 Chutes pins. The binary embeds `Dockerfile.qemu-acpi-dump` (`include_str!` in `src/acpi.rs`),
-so any change to that file, comments included, gives a new sha256.
+sha256 Chutes pins. The binary embeds `Dockerfile.qemu-acpi-dump` and `pci-bar-stub.c`
+(`include_str!` in `src/acpi.rs`) and the source line of each panic location, so a change to either
+file, or a comment that moves a line in `src/` or `cli/`, gives a new sha256.
 
 ## Reproducible build (A = B)
 

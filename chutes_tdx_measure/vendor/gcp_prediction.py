@@ -1,11 +1,11 @@
 """The GCP measurement-prediction model.
 
-A pure model of what a GCP Confidential VM measures while it boots a sek8s GCP image: every
-image-dependent register is computed from the image's own boot-chain digests (the
-``chutes.gcp-prediction-inputs.v1`` manifest that ``gcp-predict-measurements.py inputs`` writes from
-the sealed disk, never a booted VM), the committed per-shape platform profile and UEFI-defaults era
-(``guest-tools/gcp-platform-profiles``), the ``dbx`` the boot measures and the Secure Boot posture.
-A sek8s GCP image is created with its sealed root's signed ``dbx`` update (``dbxupdate_x64.bin``,
+A pure model of what a GCP Confidential VM measures while it boots Chutes' GCP image layout (shim,
+GRUB with a static ``grub.cfg``, a dm-verity root): every image-dependent register is computed from
+the image's own boot-chain digests (a ``chutes.gcp-prediction-inputs.v1`` manifest read from the
+sealed disk, never from a booted VM), the per-shape platform profile and UEFI-defaults era, the
+``dbx`` the boot measures and the Secure Boot posture.
+Such an image is created with its sealed root's signed ``dbx`` update (``dbxupdate_x64.bin``,
 an ``EFI_VARIABLE_AUTHENTICATION_2``, the form Canonical's stock images carry) as its ``dbx``
 initial state; the firmware replaces Google's default ``dbx`` with the update's payload, and the
 image masks every ``dbx`` writer, so the predictor passes that payload
@@ -689,7 +689,7 @@ def dbx_after_update(default_dbx: bytes, update: bytes) -> bytes:
     """EDK2's append write of an authenticated dbx update onto ``default_dbx``: signatures already
     present are dropped, the rest is appended as one list per update list (idempotent). This is the
     ``dbx`` ``secureboot-db.service`` leaves after a boot of an image with no ``dbx`` initial state,
-    which that image's later boots measure. A sek8s GCP image registers the update itself as its
+    which that image's later boots measure. Chutes' GCP image registers the update itself as its
     initial state and masks that writer, so no prediction uses it (on the update's own payload the
     append adds nothing)."""
     payload = authenticated_update_payload(update)
@@ -971,7 +971,7 @@ def boot0002_option(
 # The boot options a disk topology adds. pd1 (one blank data disk attached at create): the
 # firmware enumerates the data disk as Boot0002, the image's fallback option is Boot0003, and
 # BootOrder is 0003,0001,0002,0000 (GCE captures of stock images). The rule holds per data disk:
-# pd2 (an owner VM's OS disk plus one data volume) measured BootOrder 0004,0001,0002,0003,0000
+# pd2 (an OS disk plus one data volume) measured BootOrder 0004,0001,0002,0003,0000
 # on c3-standard-4 and -8. GCE's firmware keeps a VM's boot options across boots, so a layout is
 # also the order the data disks first appeared in: a data disk keeps its first number, a new one
 # takes the lowest free number before Boot0000. Two boot-order variants follow with one data volume:
@@ -986,7 +986,7 @@ LAYOUTS = {
     "pd1-detached": {"image": 4, "data": (2,)},
 }
 # The topologies a prediction row names (the create-time layouts), and each one's boot-order variants,
-# predicted only as that row's RTMR0 alternatives (an owner VM's stage 0).
+# predicted only as that row's RTMR0 alternatives.
 TOPOLOGIES = ("pd1", "pd2")
 BOOT_ORDER_VARIANTS = {"pd1": ("pd1-detached",), "pd2": ("pd2-attached",)}
 
@@ -1090,7 +1090,7 @@ def check_cmdline(cmdline: str) -> str:
     return cmdline
 
 
-# The static GCP kernel line: sek8s's dm-verity kernel line (with the debug-build console suffix),
+# The static GCP kernel line: the dm-verity kernel line (with the debug-build console suffix),
 # followed by the masks that disable the console (no ``console=ttyS0`` on a non-debug image).
 _STATIC_CMDLINE_HEAD = (
     "root=/dev/mapper/verity-root verity.roothash={roothash} fastboot panic=1 "
@@ -1185,12 +1185,11 @@ def stub_load_options(cmdline_text: str) -> ModelEvent:
     """The Linux EFI stub's ``LoadOptions`` (vTPM PCR9): UTF-16LE ``BOOT_IMAGE=<kernel> <args>``
     **with one terminating UTF-16 NUL** (two zero bytes).
 
-    The stub measures the ``LoadOptions`` buffer over the ``LoadOptionsSize`` GRUB passes, and the
-    GRUB of a sek8s GCP image, 26.04's GRUB 2.14 (grub-efi-amd64-signed 1.215+2.14-2ubuntu1,
-    Authenticode SHA-256 ``137a664e...``), counts the terminator: a SEV-SNP capture measured
-    ``CD0075F1...`` for a 415-character kernel line, this form. Older images and stock 24.04 boot
-    an earlier GRUB (``4caffb53...``) whose ``LoadOptionsSize`` omits it; the model predicts only
-    the newer GRUB.
+    The stub measures the ``LoadOptions`` buffer over the ``LoadOptionsSize`` GRUB passes, and
+    Ubuntu 26.04's GRUB 2.14 (grub-efi-amd64-signed 1.215+2.14-2ubuntu1, Authenticode SHA-256
+    ``137a664e...``) counts the terminator: a SEV-SNP capture measured ``CD0075F1...`` for a
+    415-character kernel line, this form. Stock 24.04 images boot an earlier GRUB (``4caffb53...``)
+    whose ``LoadOptionsSize`` omits it; the model predicts only the newer GRUB.
     """
     return ModelEvent(
         9,
@@ -1207,7 +1206,7 @@ def stub_initrd(digests: Mapping[str, str]) -> ModelEvent:
 
 
 def static_grub_events(inputs: Mapping[str, Any], *, vtpm: bool) -> list[ModelEvent]:
-    """GRUB's events on a sek8s GCP image, in measurement order: the ESP stub, the four ``*.lst``
+    """GRUB's events on Chutes' GCP image, in measurement order: the ESP stub, the four ``*.lst``
     reads, the static ``grub.cfg`` and its one entry; with ``vtpm`` the Linux EFI stub's two events.
     """
     esp, boot = inputs["esp"], inputs["boot"]

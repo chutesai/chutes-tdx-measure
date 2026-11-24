@@ -74,7 +74,7 @@ def intel_pki() -> IntelPki:
 
 
 def pin(monkeypatch) -> IntelPki:
-    """Pin the synthetic root where the kit reads Intel's (``vendor/chutes_attest/intel_root.py``),
+    """Pin the synthetic root where this package reads Intel's (``vendor/chutes_attest/intel_root.py``),
     with no collateral source named by the environment."""
     pki = intel_pki()
     monkeypatch.setattr(intel_root, "INTEL_SGX_ROOT_CA_DER", pki.root_der)
@@ -153,7 +153,7 @@ def collateral_document(tcb_info_chain: str, qe_identity_chain: str, issued: str
 
 
 class Fetched:
-    """What the collateral seam returns, reduced to what the kit reads: an object with a JSON form."""
+    """What the collateral seam returns, reduced to what this package reads: an object with a JSON form."""
 
     def __init__(self, document):
         self.document = document

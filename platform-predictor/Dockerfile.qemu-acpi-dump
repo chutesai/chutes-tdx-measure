@@ -117,7 +117,8 @@ WORKDIR /qemu-source
 
 USER qemu-user
 
-# Patch QEMU source to dump ACPI tables: inject code to write ACPI tables to /output/, force EOI intercept to 1, and skip pc-bios/tests builds
+# Patch QEMU to write the SMBIOS tables and the ACPI tables to /output/ and exit at the firmware's
+# first ACPI read, force the EOI intercept to 1, and skip the pc-bios and tests builds.
 ARG acpi_tables_dump_loc='\n\n    int fd = open("\/output\/'"${ACPI_TABLES_NAME}"'", O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);\n    if(fd != -1) {\n        int ret = write(fd, (uint8_t *)tables.table_data->data, tables.table_data->len);\n        if (ret < tables.table_data->len) {\n            printf("Error: Failed to write the acpi tables\\n");\n        } else {\n            printf("Successfully wrote the acpi tables to the file \\"'"${ACPI_TABLES_NAME}"'\\"\\n");\n        }\n    } else {\n        printf("Error: Failed to create acpi_tables file.\\n");\n    }\n    exit(0);'
 ARG smbios_tables_dump_loc='\n\n    FILE *smbios_dump = fopen("\/output\/smbios-tables.bin", "wb");\n    if (smbios_dump == NULL || fwrite(smbios_tables, 1, smbios_tables_len, smbios_dump) != smbios_tables_len) {\n        fprintf(stderr, "Error: Failed to write SMBIOS tables\\n");\n        exit(1);\n    }\n    fclose(smbios_dump);'
 ARG acpi_build_c="hw/i386/acpi-build.c"
@@ -125,14 +126,14 @@ ARG acpi_common_c="hw/i386/acpi-common.c"
 ARG fw_cfg_c="hw/i386/fw_cfg.c"
 ARG meson_build="meson.build"
 
-# The subdir('tests') reference moved inside an `if want_tools` block in QEMU 10.x and is now indented;
-# match optional leading whitespace so both layouts get commented out alongside subdir('pc-bios').
+# QEMU 10.x indents subdir('tests') inside an `if want_tools` block: the pattern allows leading
+# whitespace so both layouts are commented out, as is subdir('pc-bios').
 RUN perl -i -0pe 's/(acpi_build_update\(void \*build_opaque\)[\s\S]*?acpi_build\([^;]*;)/\1'"$acpi_tables_dump_loc"'/gs' "$acpi_build_c" && \
     perl -i -0pe 's/(smbios_get_tables\([\s\S]*?\&error_fatal\);)/\1'"$smbios_tables_dump_loc"'/s' "$fw_cfg_c" && \
     perl -i -pe 's/x86ms->eoi_intercept_unsupported;/1;/g' "$acpi_build_c" "$acpi_common_c" && \
     perl -i -pe "s/^(\s*)(subdir\('pc-bios'\)|subdir\('tests'\))/\$1# \$2/g" "$meson_build"
 
-# Configure QEMU with minimal features to reduce build time and image size - only KVM acceleration is needed for ACPI table generation
+# A minimal x86_64 system emulator (KVM and TCG) keeps the build short.
 RUN ./configure \
     --disable-bsd-user \
     --disable-guest-agent \
@@ -184,7 +185,6 @@ RUN ./configure \
 
 RUN make -j$(nproc)
 
-# Add health check for container monitoring
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD ["build/qemu-system-x86_64", "--version"]
 

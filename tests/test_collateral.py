@@ -71,7 +71,7 @@ def test_the_genuine_chain_passes_under_the_pinned_root_only(monkeypatch):
     spaced = "\n" + pki.signer_chain.replace("\n", "\r\n").replace(
         "-----END CERTIFICATE-----\r\n", "-----END CERTIFICATE-----\r\n\r\n")
     both = {"tcb_info_issuer_chain": pki.signer_chain, "qe_identity_issuer_chain": spaced}
-    # Under the kit's own pin, Intel's, the synthetic chain is another root's.
+    # Under the package's own pin, Intel's, the synthetic chain is another root's.
     assert "does not end at the pinned Intel SGX root CA" in collateral.collateral_signers(both)
     pin(monkeypatch)
     assert collateral.collateral_signers(both) is None
@@ -82,7 +82,7 @@ def test_the_genuine_chain_passes_under_the_pinned_root_only(monkeypatch):
         {**both, "tcb_info_issuer_chain": under_intel})
 
 
-# ---- the path every quote of this kit takes: fetch once, judge, hand the verifier what was judged
+# ---- the path every quote takes here: fetch once, judge, hand the verifier what was judged
 
 def test_the_verifier_is_handed_the_text_whose_signers_were_judged(monkeypatch):
     pki = pin(monkeypatch)
